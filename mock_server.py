@@ -162,14 +162,29 @@ def user_info():
     return ok(user)
 
 
-@app.route("/v1/user/login", methods=["POST"])
+@app.route("/v1/user/login", methods=["POST", "GET"])
 def login():
-    return ok({"access_token": "mock-token-001"})
+    """Login — return token + set Authorization header like real backend."""
+    from flask import make_response
+    resp = make_response(jsonify({"code": 0, "data": {"access_token": "mock-token-001",
+        "avatar": "", "nickname": "Super Admin", "email": "admin@emami.com"}, "message": "success"}))
+    resp.headers["Authorization"] = "Bearer mock-token-001"
+    return resp
 
 
 @app.route("/v1/user/register", methods=["POST"])
 def register():
-    return ok({"access_token": "mock-token-001"})
+    from flask import make_response
+    resp = make_response(jsonify({"code": 0, "data": {"access_token": "mock-token-001",
+        "avatar": "", "nickname": "Super Admin", "email": "admin@emami.com"}, "message": "success"}))
+    resp.headers["Authorization"] = "Bearer mock-token-001"
+    return resp
+
+
+@app.route("/v1/user/login/channels", methods=["GET"])
+def login_channels():
+    """Return empty login channels (no OAuth configured)."""
+    return ok([])
 
 
 @app.route("/v1/user/logout", methods=["GET"])
@@ -456,9 +471,83 @@ def admin_audit_events():
 # ══════════════════════════════════════════════════════════════
 # Knowledge Base / Dataset endpoints (full CRUD + detail)
 # ══════════════════════════════════════════════════════════════
-MOCK_KBS = []
+# Pre-seeded knowledge bases with documents so the app works out of the box
+MOCK_KBS = [
+    {
+        "kb_id": "kb-product-001", "id": "kb-product-001",
+        "name": "Product Catalog",
+        "description": "Emami product documentation including specifications, pricing, and marketing materials.",
+        "tenant_id": "tenant-001",
+        "embd_id": "BAAI/bge-large-en-v1.5@Ollama",
+        "parser_id": "naive",
+        "parser_config": {"enable_metadata": False},
+        "permission": "me", "language": "English",
+        "chunk_num": 84, "document_count": 2, "doc_num": 2,
+        "token_num": 6400, "chunk_count": 84,
+        "status": "1",
+        "create_time": ts_now - 86400, "update_time": ts_now - 3600,
+        "create_date": "2025-06-01 10:00:00", "update_date": "2025-06-02 14:30:00",
+    },
+    {
+        "kb_id": "kb-hr-002", "id": "kb-hr-002",
+        "name": "HR Policies",
+        "description": "Human resources policies, employee handbook, and compliance documents.",
+        "tenant_id": "tenant-001",
+        "embd_id": "BAAI/bge-large-en-v1.5@Ollama",
+        "parser_id": "naive",
+        "parser_config": {"enable_metadata": False},
+        "permission": "me", "language": "English",
+        "chunk_num": 42, "document_count": 1, "doc_num": 1,
+        "token_num": 3200, "chunk_count": 42,
+        "status": "1",
+        "create_time": ts_now - 172800, "update_time": ts_now - 7200,
+        "create_date": "2025-05-30 09:00:00", "update_date": "2025-06-02 12:00:00",
+    },
+]
+
 # In-memory document store keyed by kb_id
-MOCK_KB_DOCS = {}   # { kb_id: [ {doc}, ... ] }
+MOCK_KB_DOCS = {
+    "kb-product-001": [
+        {
+            "id": "doc-prod-001", "doc_id": "doc-prod-001", "kb_id": "kb-product-001",
+            "name": "Emami_Product_Catalog_2025.pdf",
+            "location": "Emami_Product_Catalog_2025.pdf",
+            "size": 2457600, "type": "pdf", "suffix": ".pdf",
+            "source_type": "local", "parser_id": "naive", "parser_config": {},
+            "run": "1", "progress": 1.0, "progress_msg": "Done",
+            "status": "1", "chunk_num": 42, "token_num": 3200,
+            "create_time": ts_now - 86400, "update_time": ts_now - 86000,
+            "create_date": "2025-06-01 10:00:00", "update_date": "2025-06-01 10:10:00",
+            "created_by": "Super Admin", "thumbnail": None,
+        },
+        {
+            "id": "doc-prod-002", "doc_id": "doc-prod-002", "kb_id": "kb-product-001",
+            "name": "Marketing_Guidelines_Q2.docx",
+            "location": "Marketing_Guidelines_Q2.docx",
+            "size": 1048576, "type": "docx", "suffix": ".docx",
+            "source_type": "local", "parser_id": "naive", "parser_config": {},
+            "run": "1", "progress": 1.0, "progress_msg": "Done",
+            "status": "1", "chunk_num": 42, "token_num": 3200,
+            "create_time": ts_now - 82800, "update_time": ts_now - 82000,
+            "create_date": "2025-06-01 11:00:00", "update_date": "2025-06-01 11:15:00",
+            "created_by": "Super Admin", "thumbnail": None,
+        },
+    ],
+    "kb-hr-002": [
+        {
+            "id": "doc-hr-001", "doc_id": "doc-hr-001", "kb_id": "kb-hr-002",
+            "name": "Employee_Handbook_2025.pdf",
+            "location": "Employee_Handbook_2025.pdf",
+            "size": 3145728, "type": "pdf", "suffix": ".pdf",
+            "source_type": "local", "parser_id": "naive", "parser_config": {},
+            "run": "1", "progress": 1.0, "progress_msg": "Done",
+            "status": "1", "chunk_num": 42, "token_num": 3200,
+            "create_time": ts_now - 172800, "update_time": ts_now - 172000,
+            "create_date": "2025-05-30 09:00:00", "update_date": "2025-05-30 09:15:00",
+            "created_by": "Super Admin", "thumbnail": None,
+        },
+    ],
+}   # { kb_id: [ {doc}, ... ] }
 
 
 def _make_default_kb(kb_id):
@@ -692,11 +781,11 @@ def document_upload():
             "source_type": "local",
             "parser_id": "naive",
             "parser_config": {},
-            "run": "0",
-            "progress": 0.0,
-            "progress_msg": "",
-            "process_begin_at": None,
-            "process_duration": 0,
+            "run": "1",
+            "progress": 1.0,
+            "progress_msg": "Done",
+            "process_begin_at": ts,
+            "process_duration": 2.5,
             "status": "1",
             "chunk_num": 42, "token_num": 3200,
             "create_time": ts, "update_time": ts,
@@ -704,7 +793,6 @@ def document_upload():
             "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
             "created_by": MOCK_USER["nickname"],
             "thumbnail": None,
-            "run": "1", "progress": 1.0, "progress_msg": "Done (mock)",
         }
         MOCK_KB_DOCS[kb_id].append(doc)
         uploaded.append(doc)
@@ -809,6 +897,19 @@ def document_create():
 
 @app.route("/v1/document/rename", methods=["POST"])
 def document_rename():
+    """Rename a document. Real backend: JSON body {doc_id, name}."""
+    data = request.get_json(silent=True) or {}
+    doc_id = data.get("doc_id", "")
+    new_name = data.get("name", "")
+    if doc_id and new_name:
+        for docs in MOCK_KB_DOCS.values():
+            for doc in docs:
+                if doc.get("id") == doc_id or doc.get("doc_id") == doc_id:
+                    doc["name"] = new_name
+                    doc["location"] = new_name
+                    doc["update_time"] = int(time.time())
+                    doc["update_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    return ok(True)
     return ok(True)
 
 
@@ -819,12 +920,27 @@ def document_change_status():
 
 @app.route("/v1/document/rm", methods=["POST"])
 def document_rm():
+    """Remove documents by IDs. Updates parent KB counts (like real backend)."""
     data = request.get_json(silent=True) or {}
     doc_ids = data.get("doc_ids", data.get("doc_id", []))
     if isinstance(doc_ids, str):
         doc_ids = [doc_ids]
-    for kb_id in MOCK_KB_DOCS:
-        MOCK_KB_DOCS[kb_id] = [d for d in MOCK_KB_DOCS[kb_id] if d["id"] not in doc_ids]
+    affected_kbs = set()
+    for kb_id in list(MOCK_KB_DOCS.keys()):
+        before = len(MOCK_KB_DOCS[kb_id])
+        MOCK_KB_DOCS[kb_id] = [d for d in MOCK_KB_DOCS[kb_id]
+                                if d["id"] not in doc_ids and d.get("doc_id") not in doc_ids]
+        if len(MOCK_KB_DOCS[kb_id]) != before:
+            affected_kbs.add(kb_id)
+    # Update parent KB counts
+    for kb_id in affected_kbs:
+        kb = _find_kb(kb_id)
+        if kb:
+            all_docs = MOCK_KB_DOCS.get(kb_id, [])
+            kb["document_count"] = len(all_docs)
+            kb["doc_num"] = kb["document_count"]
+            kb["chunk_num"] = sum(d.get("chunk_num", 0) for d in all_docs)
+            kb["token_num"] = sum(d.get("token_num", 0) for d in all_docs)
     return ok(True)
 
 
@@ -898,7 +1014,58 @@ def document_update_metadata_setting():
 # ══════════════════════════════════════════════════════════════
 @app.route("/v1/chunk/list", methods=["POST"])
 def chunk_list():
-    return ok({"chunks": [], "total": 0, "doc": {}})
+    """Return mock chunks for a document.
+
+    Real RAGFlow: POST with JSON body {doc_id, page, size, keywords, available_int}.
+    Returns {chunks: [...], total: N, doc: {...}}.
+    """
+    data = request.get_json(silent=True) or {}
+    doc_id = data.get("doc_id", "")
+    page = int(data.get("page", 1))
+    size = int(data.get("size", 30))
+    keywords = data.get("keywords", "")
+
+    # Find the document
+    doc = None
+    for kb_id, docs in MOCK_KB_DOCS.items():
+        for d in docs:
+            if d.get("id") == doc_id or d.get("doc_id") == doc_id:
+                doc = d
+                break
+        if doc:
+            break
+
+    if not doc or doc.get("chunk_num", 0) == 0:
+        return ok({"chunks": [], "total": 0, "doc": doc or {}})
+
+    # Generate mock chunks for parsed documents
+    chunk_count = min(doc.get("chunk_num", 0), 10)  # Cap at 10 for demo
+    chunks = []
+    for i in range(chunk_count):
+        chunk_id = f"chunk-{doc_id}-{i:03d}"
+        content = f"This is chunk {i+1} from document '{doc.get('name', 'Unknown')}'. It contains relevant information that has been extracted and indexed for retrieval."
+        chunks.append({
+            "chunk_id": chunk_id,
+            "content_with_weight": content,
+            "doc_id": doc_id,
+            "docnm_kwd": doc.get("name", ""),
+            "doc_type_kwd": doc.get("type", "txt"),
+            "important_kwd": [],
+            "question_kwd": [],
+            "tag_kwd": [],
+            "tag_feas": "",
+            "image_id": "",
+            "available_int": 1,
+            "positions": [],
+        })
+
+    # Apply keyword filter
+    if keywords:
+        chunks = [c for c in chunks if keywords.lower() in c["content_with_weight"].lower()]
+
+    total = len(chunks)
+    start = (page - 1) * size
+    return ok({"chunks": chunks[start:start + size], "total": total, "doc": doc})
 
 
 @app.route("/v1/chunk/create", methods=["POST"])
@@ -940,39 +1107,67 @@ def chunk_knowledge_graph():
 # Dialog / Chat endpoints  (full CRUD + conversations)
 # ══════════════════════════════════════════════════════════════
 
+def _resolve_kb_names(kb_ids):
+    """Resolve knowledge base names from IDs (like real RAGFlow backend)."""
+    names = []
+    for kid in (kb_ids or []):
+        kb = _find_kb(kid)
+        if kb:
+            names.append(kb.get("name", kid))
+        else:
+            names.append(kid)
+    return names
+
+
 def _make_dialog(dialog_id, name, **overrides):
     """Build a properly-shaped dialog (chat assistant) object."""
     ts = int(time.time())
+
+    # Handle prompt_config: if passed as a complete dict, use it; otherwise build defaults
+    prompt_config = overrides.pop("prompt_config", None)
+    if not prompt_config or not isinstance(prompt_config, dict):
+        prompt_config = {
+            "system": "You are a helpful AI assistant. Answer questions using only the provided knowledge base.\n\nKnowledge Base:\n{knowledge}\n\nAbove is the knowledge base.",
+            "prologue": "Hi! I'm your AI assistant. Ask me anything about the linked knowledge bases.",
+            "empty_response": "Sorry, I couldn't find relevant information. Please try rephrasing.",
+            "quote": True, "keyword": True, "refine_multiturn": True,
+            "use_kg": False, "tts": False,
+            "parameters": [{"key": "knowledge", "optional": False}],
+        }
+
+    # Resolve kb_names from kb_ids (like real backend)
+    kb_ids = overrides.pop("kb_ids", [])
+    kb_names = _resolve_kb_names(kb_ids)
+
     d = {
         "id": dialog_id, "dialog_id": dialog_id,
         "name": name,
-        "description": overrides.get("description", ""),
-        "icon": overrides.get("icon", ""),
+        "description": overrides.pop("description", ""),
+        "icon": overrides.pop("icon", ""),
         "language": "English",
-        "kb_ids": overrides.get("kb_ids", []),
-        "kb_names": overrides.get("kb_names", []),
-        "llm_id": overrides.get("llm_id", MOCK_TENANT["llm_id"]),
-        "llm_setting": {"temperature": 0.1, "max_tokens": 4096, "top_p": 0.3,
-                        "frequency_penalty": 0.7, "presence_penalty": 0.4},
-        "llm_setting_type": "Precise",
-        "prompt_config": {
-            "system": overrides.get("system", "You are a helpful AI assistant. Answer questions using only the provided knowledge base."),
-            "prologue": overrides.get("prologue", "Hi! I'm your AI assistant. Ask me anything about the linked knowledge bases."),
-            "empty_response": overrides.get("empty_response", "Sorry, I couldn't find relevant information. Please try rephrasing."),
-            "quote": True, "keyword": True, "refine_multiturn": True,
-            "use_kg": False, "tts": False, "parameters": [],
-        },
-        "prompt_type": "simple",
-        "top_k": 1024, "top_n": 8,
-        "similarity_threshold": 0.2, "vector_similarity_weight": 0.3,
-        "meta_data_filter": {},
+        "kb_ids": kb_ids,
+        "kb_names": kb_names,
+        "llm_id": overrides.pop("llm_id", MOCK_TENANT["llm_id"]),
+        "llm_setting": overrides.pop("llm_setting", {
+            "temperature": 0.1, "max_tokens": 4096, "top_p": 0.3,
+            "frequency_penalty": 0.7, "presence_penalty": 0.4,
+        }),
+        "llm_setting_type": overrides.pop("llm_setting_type", "Precise"),
+        "prompt_config": prompt_config,
+        "prompt_type": overrides.pop("prompt_type", "simple"),
+        "top_k": overrides.pop("top_k", 1024),
+        "top_n": overrides.pop("top_n", 8),
+        "similarity_threshold": overrides.pop("similarity_threshold", 0.2),
+        "vector_similarity_weight": overrides.pop("vector_similarity_weight", 0.3),
+        "meta_data_filter": overrides.pop("meta_data_filter", {}),
         "status": "1",
         "tenant_id": "tenant-001",
         "create_time": ts, "update_time": ts,
         "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    d.update({k: v for k, v in overrides.items() if k not in ("system", "prologue", "empty_response")})
+    # Any remaining overrides (shouldn't be many after explicit pops)
+    d.update({k: v for k, v in overrides.items() if k not in d})
     return d
 
 
@@ -1030,24 +1225,37 @@ def dialog_get():
 
 @app.route("/v1/dialog/set", methods=["POST"])
 def dialog_set():
-    """Create or update a dialog (chat assistant)."""
+    """Create or update a dialog (chat assistant).
+
+    Real RAGFlow:
+    - Requires prompt_config
+    - Resolves kb_names from kb_ids server-side (discards client-sent kb_names)
+    - If dialog_id present and exists → update; otherwise → create
+    """
     data = request.get_json(silent=True) or {}
     dialog_id = data.get("dialog_id", "")
+
+    # Always discard client-sent kb_names (resolve server-side like real backend)
+    data.pop("kb_names", None)
+
     if dialog_id and dialog_id in MOCK_DIALOGS:
-        # Update existing
+        # ── Update existing ──
         d = MOCK_DIALOGS[dialog_id]
-        for key in ("name", "description", "icon", "kb_ids", "kb_names",
+        for key in ("name", "description", "icon", "kb_ids",
                      "llm_id", "llm_setting", "llm_setting_type",
                      "prompt_config", "prompt_type",
                      "top_k", "top_n", "similarity_threshold",
                      "vector_similarity_weight", "meta_data_filter"):
             if key in data:
                 d[key] = data[key]
+        # Resolve kb_names from kb_ids
+        if "kb_ids" in data:
+            d["kb_names"] = _resolve_kb_names(d["kb_ids"])
         d["update_time"] = int(time.time())
         d["update_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
         return ok(d)
     else:
-        # Create new
+        # ── Create new ──
         new_id = data.pop("dialog_id", None) or str(uuid.uuid4())[:12]
         name = data.pop("name", "Untitled Chat")
         d = _make_dialog(new_id, name, **data)
@@ -1092,12 +1300,48 @@ def conversation_get():
 
 @app.route("/v1/conversation/set", methods=["POST"])
 def conversation_set():
-    """Create or update a conversation."""
+    """Create or update a conversation.
+
+    Real RAGFlow uses `is_new` boolean flag:
+    - is_new=True → create new conversation, include dialog prologue in messages
+    - is_new=False → update existing conversation
+    """
     data = request.get_json(silent=True) or {}
     conv_id = data.get("conversation_id", "")
-    if conv_id and conv_id in MOCK_CONVERSATIONS:
-        # Update
-        c = MOCK_CONVERSATIONS[conv_id]
+    is_new = data.get("is_new", False)
+    # Treat string "true"/"false" as boolean
+    if isinstance(is_new, str):
+        is_new = is_new.lower() in ("true", "1", "yes")
+
+    if is_new or (conv_id and conv_id not in MOCK_CONVERSATIONS):
+        # ── Create new conversation ──
+        new_id = conv_id or str(uuid.uuid4())[:12]
+        dialog_id = data.get("dialog_id", "")
+        name = data.get("name", "New conversation")
+
+        # Include dialog prologue as first assistant message (like real RAGFlow)
+        initial_messages = []
+        dialog = MOCK_DIALOGS.get(dialog_id, {})
+        prologue = dialog.get("prompt_config", {}).get("prologue", "")
+        if prologue:
+            initial_messages.append({
+                "id": str(uuid.uuid4())[:12],
+                "content": prologue,
+                "role": "assistant",
+            })
+
+        c = _make_conversation(new_id, dialog_id, name, initial_messages)
+        MOCK_CONVERSATIONS[new_id] = c
+        return ok(c)
+    else:
+        # ── Update existing conversation ──
+        c = MOCK_CONVERSATIONS.get(conv_id)
+        if not c:
+            # Fallback: create anyway
+            dialog_id = data.get("dialog_id", "")
+            c = _make_conversation(conv_id, dialog_id, data.get("name", "New conversation"))
+            MOCK_CONVERSATIONS[conv_id] = c
+            return ok(c)
         if "name" in data:
             c["name"] = data["name"]
         if "message" in data:
@@ -1105,14 +1349,6 @@ def conversation_set():
         c["update_time"] = int(time.time())
         c["update_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
         c["is_new"] = False
-        return ok(c)
-    else:
-        # Create
-        new_id = conv_id or str(uuid.uuid4())[:12]
-        dialog_id = data.get("dialog_id", "")
-        name = data.get("name", "New conversation")
-        c = _make_conversation(new_id, dialog_id, name)
-        MOCK_CONVERSATIONS[new_id] = c
         return ok(c)
 
 
@@ -1134,7 +1370,12 @@ def conversation_delete():
 
 @app.route("/v1/conversation/completion", methods=["POST"])
 def conversation_completion():
-    """Mock streaming chat response (SSE)."""
+    """Mock streaming chat response (SSE).
+
+    Real RAGFlow format: data:{"code":0,"message":"","data":{"answer":"...","reference":{...}}}
+    Final event:         data:{"code":0,"message":"","data":true}
+    The frontend (useSendMessageWithSse) reads .data.answer and accumulates chunks.
+    """
     data = request.get_json(silent=True) or {}
     conv_id = data.get("conversation_id", "")
     messages = data.get("messages", [])
@@ -1171,52 +1412,72 @@ def conversation_completion():
         if user_msg:
             c["name"] = user_msg[:40]
 
-    # Return SSE stream
+    # Build reference data from the dialog's linked knowledge bases
+    ref_chunks = []
+    ref_doc_aggs = []
+    if conv_id and conv_id in MOCK_CONVERSATIONS:
+        dialog_id = MOCK_CONVERSATIONS[conv_id].get("dialog_id", "")
+        dialog = MOCK_DIALOGS.get(dialog_id, {})
+        kb_ids = dialog.get("kb_ids", [])
+        for kb_id in kb_ids:
+            for doc in MOCK_KB_DOCS.get(kb_id, [])[:2]:  # up to 2 docs per KB
+                ref_chunks.append({
+                    "id": f"chunk-{doc['id']}-001",
+                    "content": f"Relevant content from {doc['name']}",
+                    "document_id": doc["id"],
+                    "document_name": doc["name"],
+                    "dataset_id": kb_id,
+                    "image_id": "",
+                    "similarity": 0.85,
+                    "vector_similarity": 0.82,
+                    "term_similarity": 0.88,
+                    "positions": [],
+                })
+                ref_doc_aggs.append({
+                    "count": 1, "doc_id": doc["id"], "doc_name": doc["name"],
+                })
+
+    # Return SSE stream in the REAL RAGFlow format:
+    # data:{"code":0,"message":"","data":{"answer":"...","reference":{...}}}
     import json as _json
 
     def generate():
-        # Send message event with the full answer
-        event_data = {
-            "event": "message",
-            "message_id": msg_id,
-            "session_id": conv_id,
-            "created_at": int(time.time()),
-            "task_id": str(uuid.uuid4())[:8],
-            "data": {"content": mock_answer, "audio_binary": "", "outputs": None},
-        }
-        yield f"data: {_json.dumps(event_data)}\n\n"
-
-        # Send message_end event with references
-        end_data = {
-            "event": "message_end",
-            "message_id": msg_id,
-            "session_id": conv_id,
-            "created_at": int(time.time()),
-            "task_id": str(uuid.uuid4())[:8],
-            "data": {
-                "reference": {
-                    "chunks": [
-                        {
-                            "id": "chunk-mock-001",
-                            "content": None,
-                            "document_id": "doc-mock-001",
-                            "document_name": "Knowledge_Base_Document.pdf",
-                            "dataset_id": "kb-mock-001",
-                            "image_id": "",
-                            "similarity": 0.85,
-                            "vector_similarity": 0.82,
-                            "term_similarity": 0.88,
-                            "positions": [],
-                        }
-                    ],
-                    "doc_aggs": [
-                        {"count": 1, "doc_id": "doc-mock-001", "doc_name": "Knowledge_Base_Document.pdf"}
-                    ],
-                    "total": 1,
+        # Stream the answer in chunks (simulating real streaming)
+        words = mock_answer.split(" ")
+        accumulated = ""
+        for i, word in enumerate(words):
+            accumulated += (" " if i > 0 else "") + word
+            chunk_data = {
+                "code": 0,
+                "message": "",
+                "data": {
+                    "answer": accumulated,
+                    "reference": {},
+                    "audio_binary": None,
+                    "id": msg_id,
                 },
+            }
+            yield f"data:{_json.dumps(chunk_data)}\n\n"
+
+        # Send final chunk with full answer + references
+        final_data = {
+            "code": 0,
+            "message": "",
+            "data": {
+                "answer": mock_answer,
+                "reference": {
+                    "chunks": ref_chunks,
+                    "doc_aggs": ref_doc_aggs,
+                    "total": len(ref_chunks),
+                },
+                "audio_binary": None,
+                "id": msg_id,
             },
         }
-        yield f"data: {_json.dumps(end_data)}\n\n"
+        yield f"data:{_json.dumps(final_data)}\n\n"
+
+        # End signal
+        yield f"data:{_json.dumps({'code': 0, 'message': '', 'data': True})}\n\n"
 
     from flask import Response
     return Response(generate(), mimetype="text/event-stream",
@@ -1286,7 +1547,31 @@ def llm_list():
 
 @app.route("/v1/llm/my_llms", methods=["GET"])
 def my_llms():
-    return ok(MOCK_LLM_LIST)
+    """Return configured LLM providers.
+
+    Real backend format: {factory_name: {tags: "...", llm: [{type, name, used_token, status}]}}
+    This is DIFFERENT from /llm/list which uses {llm_name, model_type, fid, available}.
+    """
+    result = {}
+    for factory_name, models in MOCK_LLM_LIST.items():
+        tags_set = set()
+        llm_list = []
+        for m in models:
+            mt = m.get("model_type", "chat")
+            tag = {"chat": "LLM,CHAT", "embedding": "TEXT EMBEDDING", "image2text": "IMAGE2TEXT,CHAT",
+                   "speech2text": "SPEECH2TEXT", "tts": "TTS", "rerank": "RERANK"}.get(mt, "LLM")
+            tags_set.update(tag.split(","))
+            llm_list.append({
+                "type": mt,
+                "name": m["llm_name"],
+                "used_token": 0,
+                "status": m.get("status", "1"),
+            })
+        result[factory_name] = {
+            "tags": ",".join(sorted(tags_set)),
+            "llm": llm_list,
+        }
+    return ok(result)
 
 
 @app.route("/v1/llm/set_api_key", methods=["POST"])
