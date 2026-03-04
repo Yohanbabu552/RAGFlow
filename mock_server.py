@@ -401,6 +401,14 @@ def my_llms():
     return ok({})
 
 
+@app.route("/v1/system/config", methods=["GET"])
+def system_config():
+    return ok({
+        "registerEnabled": 1,
+        "languages": ["English", "Hindi"],
+    })
+
+
 @app.route("/v1/system/version", methods=["GET"])
 def system_version():
     return ok({"version": "0.24.0-rbac-demo"})
@@ -461,7 +469,7 @@ def catch_all_api(path):
 if __name__ == "__main__":
     print()
     print("=" * 60)
-    print("  RBAC Demo Mock Server (v2 — Pre-seeded)")
+    print("  RBAC Demo Mock Server (v3 — Full UI)")
     print("  Listening on http://0.0.0.0:9380")
     print("=" * 60)
     print(f"  User: admin@emami.com (Super Admin)")
@@ -470,12 +478,14 @@ if __name__ == "__main__":
         users_count = len(PROJECT_USERS.get(pid, []))
         print(f"    - {proj['name']} ({users_count} users)")
     print()
-    print("  RBAC Features visible across:")
-    print("    - Home page: Role badge + Projects overview")
-    print("    - Header: Role badge + User dropdown with role info")
-    print("    - Projects tab: Full project management")
-    print("    - Datasets: Project filter bar")
-    print("    - Team Settings: My Role & Access section")
+    print("  New RBAC UI Features:")
+    print("    - Sidebar layout (dark blue, 260px)")
+    print("    - Split-screen login page")
+    print("    - Dashboard with stats, recent docs, actions")
+    print("    - User Management (super-admin only)")
+    print("    - Admin Dashboard with storage chart")
+    print("    - Audit Logs with event table")
+    print("    - RBAC role-based nav visibility")
     print("=" * 60)
     print()
     app.run(host="0.0.0.0", port=9380, debug=False)

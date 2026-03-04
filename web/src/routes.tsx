@@ -74,6 +74,11 @@ export enum Routes {
   AdminMonitoring = `${Admin}/monitoring`,
   Projects = '/projects',
   ProjectDetail = '/project',
+
+  // ── New RBAC admin routes ──
+  AdminUsersPage = '/admin-users',
+  AdminDashboardPage = '/admin-dashboard',
+  AdminAuditPage = '/admin-audit',
 }
 
 const defaultRouteFallback = (
@@ -106,6 +111,9 @@ const withLazyRoute = (
 };
 
 const routeConfigOptions = [
+  // ══════════════════════════════════════════════════════════
+  // Standalone pages (no sidebar layout)
+  // ══════════════════════════════════════════════════════════
   {
     path: '/login',
     Component: () => import('@/pages/login-next'),
@@ -132,110 +140,14 @@ const routeConfigOptions = [
     layout: false,
   },
   {
-    path: Routes.AgentList,
-    Component: () => import('@/pages/agents'),
-  },
-  {
     path: '/document/:id',
     Component: () => import('@/pages/document-viewer'),
     layout: false,
   },
   {
-    path: '/*',
-    Component: () => import('@/pages/404'),
-    layout: false,
-  },
-  {
-    path: Routes.Root,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    loader: ({ request }) => {
-      const url = new URL(request.url);
-      const auth = url.searchParams.get('auth');
-      if (auth) {
-        authorizationUtil.setAuthorization(auth);
-        url.searchParams.delete('auth');
-        return redirect(`${url.pathname}${url.search}`);
-      }
-      return null;
-    },
-    children: [
-      {
-        path: Routes.Root,
-        Component: () => import('@/pages/home'),
-      },
-    ],
-  },
-  {
-    path: Routes.Datasets,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: Routes.Datasets,
-        Component: () => import('@/pages/datasets'),
-      },
-    ],
-  },
-  {
-    path: Routes.Chats,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: Routes.Chats,
-        Component: () => import('@/pages/next-chats'),
-      },
-    ],
-  },
-  {
     path: Routes.Chat + '/:id',
     layout: false,
     Component: () => import('@/pages/next-chats/chat'),
-  },
-  {
-    path: Routes.Searches,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: Routes.Searches,
-        Component: () => import('@/pages/next-searches'),
-      },
-    ],
-  },
-  {
-    path: Routes.Memories,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: Routes.Memories,
-        Component: () => import('@/pages/memories'),
-      },
-    ],
-  },
-  {
-    path: `${Routes.Memory}`,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: `${Routes.Memory}`,
-        layout: false,
-        Component: () => import('@/pages/memory'),
-        children: [
-          {
-            path: `${Routes.Memory}/${Routes.MemoryMessage}/:id`,
-            Component: () => import('@/pages/memory/memory-message'),
-          },
-          {
-            path: `${Routes.Memory}/${Routes.MemorySetting}/:id`,
-            Component: () => import('@/pages/memory/memory-setting'),
-          },
-        ],
-      },
-    ],
   },
   {
     path: `${Routes.Search}/:id`,
@@ -246,17 +158,6 @@ const routeConfigOptions = [
     path: `${Routes.SearchShare}`,
     layout: false,
     Component: () => import('@/pages/next-search/share'),
-  },
-  {
-    path: Routes.Agents,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: Routes.Agents,
-        Component: () => import('@/pages/agents'),
-      },
-    ],
   },
   {
     path: `${Routes.AgentLogPage}/:id`,
@@ -279,45 +180,121 @@ const routeConfigOptions = [
     layout: false,
     Component: () => import('@/pages/agents/agent-templates'),
   },
-
-  {
-    path: Routes.Projects,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
-      {
-        path: Routes.Projects,
-        Component: () => import('@/pages/projects'),
-      },
-    ],
-  },
   {
     path: `${Routes.ProjectDetail}/:id`,
     layout: false,
     Component: () => import('@/pages/projects/project-detail'),
   },
   {
-    path: Routes.Files,
+    path: `${Routes.DataflowResult}`,
     layout: false,
-    Component: () => import('@/layouts/next'),
+    Component: () => import('@/pages/dataflow-result'),
+  },
+  {
+    path: `${Routes.ParsedResult}/chunks`,
+    layout: false,
+    Component: () =>
+      import(
+        '@/pages/chunk/parsed-result/add-knowledge/components/knowledge-chunk'
+      ),
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // Main Application Layout — Sidebar + Header (AppLayout)
+  // All primary pages render inside this layout.
+  // ══════════════════════════════════════════════════════════
+  {
+    path: Routes.Root,
+    layout: false,
+    Component: () => import('@/layouts/app-layout'),
+    loader: ({ request }) => {
+      const url = new URL(request.url);
+      const auth = url.searchParams.get('auth');
+      if (auth) {
+        authorizationUtil.setAuthorization(auth);
+        url.searchParams.delete('auth');
+        return redirect(`${url.pathname}${url.search}`);
+      }
+      return null;
+    },
     children: [
+      // ── Main pages ──
+      {
+        path: Routes.Root,
+        Component: () => import('@/pages/home'),
+      },
+      {
+        path: Routes.Datasets,
+        Component: () => import('@/pages/datasets'),
+      },
+      {
+        path: Routes.Chats,
+        Component: () => import('@/pages/next-chats'),
+      },
+      {
+        path: Routes.Searches,
+        Component: () => import('@/pages/next-searches'),
+      },
+      {
+        path: Routes.Memories,
+        Component: () => import('@/pages/memories'),
+      },
+      {
+        path: Routes.Agents,
+        Component: () => import('@/pages/agents'),
+      },
+      {
+        path: Routes.AgentList,
+        Component: () => import('@/pages/agents'),
+      },
+      {
+        path: Routes.Projects,
+        Component: () => import('@/pages/projects'),
+      },
       {
         path: Routes.Files,
         Component: () => import('@/pages/files'),
       },
-    ],
-  },
-  {
-    path: Routes.DatasetBase,
-    layout: false,
-    Component: () => import('@/layouts/next'),
-    children: [
+      // Dataset base redirect
       {
         path: Routes.DatasetBase,
         element: <Navigate to={Routes.Dataset} replace />,
       },
+      // Memory with sub-routes
+      {
+        path: `${Routes.Memory}`,
+        Component: () => import('@/pages/memory'),
+        children: [
+          {
+            path: `${Routes.Memory}/${Routes.MemoryMessage}/:id`,
+            Component: () => import('@/pages/memory/memory-message'),
+          },
+          {
+            path: `${Routes.Memory}/${Routes.MemorySetting}/:id`,
+            Component: () => import('@/pages/memory/memory-setting'),
+          },
+        ],
+      },
+
+      // ── RBAC Admin pages (new) ──
+      {
+        path: Routes.AdminUsersPage,
+        Component: () => import('@/pages/admin-users'),
+      },
+      {
+        path: Routes.AdminDashboardPage,
+        Component: () => import('@/pages/admin-dashboard'),
+      },
+      {
+        path: Routes.AdminAuditPage,
+        Component: () => import('@/pages/admin-audit'),
+      },
     ],
   },
+
+  // ══════════════════════════════════════════════════════════
+  // Dataset internal pages (own layout — dataset page wraps sub-pages)
+  // ══════════════════════════════════════════════════════════
   {
     path: Routes.DatasetBase,
     layout: false,
@@ -345,17 +322,10 @@ const routeConfigOptions = [
       },
     ],
   },
-  {
-    path: `${Routes.DataflowResult}`,
-    layout: false,
-    Component: () => import('@/pages/dataflow-result'),
-  },
-  {
-    path: `${Routes.ParsedResult}/chunks`,
-    layout: false,
-    Component: () =>
-      import('@/pages/chunk/parsed-result/add-knowledge/components/knowledge-chunk'),
-  },
+
+  // ══════════════════════════════════════════════════════════
+  // Chunk pages (own internal layout)
+  // ══════════════════════════════════════════════════════════
   {
     path: Routes.Chunk,
     layout: false,
@@ -381,6 +351,10 @@ const routeConfigOptions = [
     layout: false,
     Component: () => import('@/pages/chunk'),
   },
+
+  // ══════════════════════════════════════════════════════════
+  // User Settings (own sidebar layout)
+  // ══════════════════════════════════════════════════════════
   {
     path: '/user-setting',
     Component: () => import('@/pages/user-setting'),
@@ -427,6 +401,10 @@ const routeConfigOptions = [
 
     layout: false,
   },
+
+  // ══════════════════════════════════════════════════════════
+  // Admin Console (own layout with separate auth)
+  // ══════════════════════════════════════════════════════════
   {
     path: Routes.Admin,
     Component: () => import('@/pages/admin/layouts/root-layout'),
@@ -482,6 +460,15 @@ const routeConfigOptions = [
       },
     ],
   } satisfies LazyRouteConfig,
+
+  // ══════════════════════════════════════════════════════════
+  // 404 Catch-all
+  // ══════════════════════════════════════════════════════════
+  {
+    path: '/*',
+    Component: () => import('@/pages/404'),
+    layout: false,
+  },
 ];
 
 const wrapRoutes = (routes: LazyRouteConfig[]): RouteObject[] =>

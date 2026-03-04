@@ -1,0 +1,59 @@
+/**
+ * QuickActions — 2x2 grid of quick action cards.
+ */
+
+import { Routes } from '@/routes';
+import { FolderPlus, MessageSquare, Upload, UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router';
+
+const actions = [
+  {
+    label: 'Upload Files',
+    icon: Upload,
+    path: Routes.Datasets,
+  },
+  {
+    label: 'AI Chat',
+    icon: MessageSquare,
+    path: Routes.Chats,
+  },
+  {
+    label: 'New Project',
+    icon: FolderPlus,
+    path: Routes.Projects,
+  },
+  {
+    label: 'Add User',
+    icon: UserPlus,
+    path: Routes.AdminUsersPage,
+  },
+];
+
+export function QuickActions() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="bg-white rounded-xl border border-[#E2E8F0]">
+      <div className="px-5 py-4 border-b border-[#E2E8F0]">
+        <h3 className="text-sm font-semibold text-[#1A202C]">Quick Actions</h3>
+      </div>
+      <div className="p-5 grid grid-cols-2 gap-3">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.label}
+              onClick={() => navigate(action.path)}
+              className="flex flex-col items-center p-4 rounded-lg border border-[#E2E8F0] hover:border-[#0078D4] hover:bg-[#F8FAFF] hover:shadow-sm transition-all text-center"
+            >
+              <Icon className="size-6 text-[#0078D4] mb-2" />
+              <span className="text-xs font-semibold text-[#1A202C]">
+                {action.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

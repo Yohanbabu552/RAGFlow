@@ -1,3 +1,13 @@
+/**
+ * Login Page — Split-screen design matching EMAMI reference.
+ *
+ * Left panel: Gradient branding with feature checklist.
+ * Right panel: Login/Register form with show/hide password toggle.
+ *
+ * Keeps all existing auth logic: useLogin, useRegister, RSA encryption,
+ * SSO channels, remember me, redirect on isLogin.
+ */
+
 import SvgIcon from '@/components/svg-icon';
 import { useAuth } from '@/hooks/auth-hooks';
 import {
@@ -12,7 +22,6 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import Spotlight from '@/components/spotlight';
 import { Button, ButtonLoading } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -26,14 +35,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Check, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { BgSvg } from './bg';
-import FlipCard3D from './card';
-import './index.less';
 
 const Login = () => {
   const [title, setTitle] = useState('login');
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login, loading: signLoading } = useLogin();
   const { register, loading: registerLoading } = useRegister();
@@ -41,7 +49,6 @@ const Login = () => {
   const { login: loginWithChannel, loading: loginWithChannelLoading } =
     useLoginWithChannel();
   const { t } = useTranslation('translation', { keyPrefix: 'login' });
-  const [isLoginPage, setIsLoginPage] = useState(true);
 
   const loading =
     signLoading ||
@@ -63,14 +70,10 @@ const Login = () => {
   };
 
   const changeTitle = () => {
-    setIsLoginPage(title !== 'login');
     if (title === 'login' && !registerEnabled) {
       return;
     }
-
-    setTimeout(() => {
-      setTitle(title === 'login' ? 'register' : 'login');
-    }, 200);
+    setTitle(title === 'login' ? 'register' : 'login');
   };
 
   const FormSchema = z
@@ -131,229 +134,288 @@ const Login = () => {
   };
 
   return (
-    <>
-      <Spotlight opcity={0.4} coverage={60} color={'rgb(128, 255, 248)'} />
-      <Spotlight
-        opcity={0.3}
-        coverage={12}
-        X={'10%'}
-        Y={'-10%'}
-        color={'rgb(128, 255, 248)'}
-      />
-      <Spotlight
-        opcity={0.3}
-        coverage={12}
-        X={'90%'}
-        Y={'-10%'}
-        color={'rgb(128, 255, 248)'}
-      />
-      <div className=" h-[inherit] relative overflow-auto">
-        <BgSvg isPaused />
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0F1F3A] via-[#1F3864] to-[#0F2847]">
+      {/* Centered card container */}
+      <div className="flex-1 flex items-center justify-center p-5 md:p-10">
+        <div className="flex w-full max-w-[900px] min-h-[520px] bg-white rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+          {/* ── Left Branding Panel ─────────────────────── */}
+          <div className="hidden md:flex w-[380px] shrink-0 flex-col justify-between bg-gradient-to-br from-[#1F3864] to-[#0078D4] p-12 relative overflow-hidden">
+            {/* Decorative circles */}
+            <div className="absolute -top-20 -right-20 w-[260px] h-[260px] rounded-full bg-white/[0.04]" />
+            <div className="absolute -bottom-[60px] -left-[60px] w-[200px] h-[200px] rounded-full bg-white/[0.03]" />
 
-        <div className="absolute top-3 flex flex-col items-center mb-12 w-full text-text-primary">
-          <div className="flex items-center mb-4 w-full pl-10 pt-10 ">
-            <div className="w-12 h-12 p-2 rounded-lg flex items-center justify-center mr-3">
-              <img
-                src={'/logo.svg'}
-                alt="logo"
-                className="size-8 mr-[12] cursor-pointer"
-              />
+            {/* Top section */}
+            <div className="relative z-10">
+              {/* Brand logo */}
+              <div className="flex items-center gap-3 mb-12">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-white/15 backdrop-blur-[10px]">
+                  <span className="text-lg font-extrabold text-white">E</span>
+                </div>
+                <div>
+                  <span className="block text-lg font-bold text-white">
+                    Emami
+                  </span>
+                  <span className="block text-[11px] text-white/60">
+                    Document Intelligence
+                  </span>
+                </div>
+              </div>
+
+              {/* Heading */}
+              <h2 className="text-2xl font-bold text-white leading-tight mb-3">
+                Intelligent Document Processing Platform
+              </h2>
+              <p className="text-sm text-white/70 leading-relaxed">
+                Upload, extract, and query your product documents with
+                AI-powered intelligence.
+              </p>
             </div>
-            <div className="text-xl font-bold self-center">RAGFlow</div>
+
+            {/* Feature checklist */}
+            <div className="relative z-10 space-y-2">
+              {[
+                'AI-powered OCR extraction',
+                'Smart document Q&A chat',
+                'Multi-lingual support',
+                'Secure role-based access',
+              ].map((feature) => (
+                <div
+                  key={feature}
+                  className="flex items-center gap-3 py-2 text-[13px] font-medium text-white/80"
+                >
+                  <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-white/[0.12]">
+                    <Check className="size-3.5 text-[#4ADE80]" />
+                  </div>
+                  {feature}
+                </div>
+              ))}
+            </div>
           </div>
-          <h1 className="text-[36px] font-medium  text-center mb-2">
-            {t('title')}
-          </h1>
-          {/* border border-accent-primary rounded-full */}
-          {/* <div className="mt-4 px-6 py-1 text-sm font-medium text-cyan-600  hover:bg-cyan-50 transition-colors duration-200 border-glow relative overflow-hidden">
-            {t('start')}
-          </div> */}
-        </div>
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-[1050px] px-4 sm:px-6 lg:px-8">
-          {/* Logo and Header */}
 
-          {/* Login Form */}
-          <FlipCard3D isLoginPage={isLoginPage}>
-            <div className="flex flex-col items-center justify-center w-full">
-              <div className="text-center mb-8">
-                <h2 className="text-xl font-semibold text-text-primary">
-                  {title === 'login' ? t('loginTitle') : t('signUpTitle')}
-                </h2>
-              </div>
-              <div className=" w-full max-w-[540px] bg-bg-component backdrop-blur-sm rounded-2xl shadow-xl pt-14 pl-10 pr-10 pb-2 border border-border-button ">
-                <Form {...form}>
-                  <form
-                    className="flex flex-col gap-8 text-text-primary "
-                    onSubmit={form.handleSubmit(onCheck)}
-                  >
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel required>{t('emailLabel')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder={t('emailPlaceholder')}
-                              autoComplete="email"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {title === 'register' && (
-                      <FormField
-                        control={form.control}
-                        name="nickname"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel required>{t('nicknameLabel')}</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder={t('nicknamePlaceholder')}
-                                autoComplete="username"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+          {/* ── Right Form Panel ────────────────────────── */}
+          <div className="flex-1 flex flex-col justify-center px-8 py-10 sm:px-11">
+            <h2 className="text-2xl font-bold text-[#1A202C] mb-1.5">
+              {title === 'login' ? 'Welcome back' : 'Create an account'}
+            </h2>
+            <p className="text-sm text-[#64748B] mb-8">
+              {title === 'login'
+                ? 'Sign in to your account to continue'
+                : 'Sign up to get started with Emami Document Intelligence'}
+            </p>
 
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel required>{t('passwordLabel')}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                type={'password'}
-                                placeholder={t('passwordPlaceholder')}
-                                autoComplete={
-                                  title === 'login'
-                                    ? 'current-password'
-                                    : 'new-password'
-                                }
-                                {...field}
-                              />
-                              {/* <button
-                                type="button"
-                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                                onClick={() => setShowPassword(!showPassword)}
-                              >
-                                {showPassword ? (
-                                  <EyeOff className="h-4 w-4 text-gray-500" />
-                                ) : (
-                                  <Eye className="h-4 w-4 text-gray-500" />
-                                )}
-                              </button> */}
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+            <Form {...form}>
+              <form
+                className="flex flex-col gap-5"
+                onSubmit={form.handleSubmit(onCheck)}
+              >
+                {/* Email */}
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[13px] font-semibold text-[#1A202C]">
+                        {t('emailLabel')}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="you@emami.com"
+                          autoComplete="email"
+                          className="h-11 rounded-lg border-[#E2E8F0] px-4 text-sm focus:border-[#0078D4] focus:ring-[#0078D4]/20"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                    {title === 'login' && (
-                      <FormField
-                        control={form.control}
-                        name="remember"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <div className="flex gap-2">
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={(checked) => {
-                                    field.onChange(checked);
-                                  }}
-                                />
-                                <FormLabel
-                                  className={cn(' hover:text-text-primary', {
-                                    'text-text-disabled': !field.value,
-                                    'text-text-primary': field.value,
-                                  })}
-                                >
-                                  {t('rememberMe')}
-                                </FormLabel>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                    <ButtonLoading
-                      type="submit"
-                      loading={loading}
-                      className="bg-metallic-gradient border-b-[#00BEB4] border-b-2 hover:bg-metallic-gradient hover:border-b-[#02bcdd] w-full my-8"
-                    >
-                      {title === 'login' ? t('login') : t('continue')}
-                    </ButtonLoading>
-                    {title === 'login' && channels && channels.length > 0 && (
-                      <div className="mt-3 border">
-                        {channels.map((item) => (
-                          <Button
-                            variant={'transparent'}
-                            key={item.channel}
-                            onClick={() => handleLoginWithChannel(item.channel)}
-                            style={{ marginTop: 10 }}
-                          >
-                            <div className="flex items-center">
-                              <SvgIcon
-                                name={item.icon || 'sso'}
-                                width={20}
-                                height={20}
-                                style={{ marginRight: 5 }}
-                              />
-                              Sign in with {item.display_name}
-                            </div>
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                  </form>
-                </Form>
-
-                {title === 'login' && registerEnabled && (
-                  <div className="mt-10 text-right">
-                    <p className="text-text-disabled text-sm">
-                      {t('signInTip')}
-                      <Button
-                        variant={'transparent'}
-                        onClick={changeTitle}
-                        className="text-accent-primary/90 hover:text-accent-primary hover:bg-transparent font-medium border-none transition-colors duration-200"
-                      >
-                        {t('signUp')}
-                      </Button>
-                    </p>
-                  </div>
-                )}
+                {/* Nickname (register only) */}
                 {title === 'register' && (
-                  <div className="mt-10 text-right">
-                    <p className="text-text-disabled text-sm">
-                      {t('signUpTip')}
-                      <Button
-                        variant={'transparent'}
-                        onClick={changeTitle}
-                        className="text-accent-primary/90 hover:text-accent-primary hover:bg-transparent font-medium border-none transition-colors duration-200"
-                      >
-                        {t('login')}
-                      </Button>
-                    </p>
+                  <FormField
+                    control={form.control}
+                    name="nickname"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-[13px] font-semibold text-[#1A202C]">
+                          {t('nicknameLabel')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={t('nicknamePlaceholder')}
+                            autoComplete="username"
+                            className="h-11 rounded-lg border-[#E2E8F0] px-4 text-sm focus:border-[#0078D4] focus:ring-[#0078D4]/20"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* Password */}
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[13px] font-semibold text-[#1A202C]">
+                        {t('passwordLabel')}
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder={t('passwordPlaceholder')}
+                            autoComplete={
+                              title === 'login'
+                                ? 'current-password'
+                                : 'new-password'
+                            }
+                            className="h-11 rounded-lg border-[#E2E8F0] px-4 pr-11 text-sm focus:border-[#0078D4] focus:ring-[#0078D4]/20"
+                            {...field}
+                          />
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                            onClick={() => setShowPassword(!showPassword)}
+                            tabIndex={-1}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="size-4" />
+                            ) : (
+                              <Eye className="size-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Remember me + Forgot password (login only) */}
+                {title === 'login' && (
+                  <div className="flex items-center justify-between">
+                    <FormField
+                      control={form.control}
+                      name="remember"
+                      render={({ field }) => (
+                        <FormItem className="flex-row items-center space-y-0">
+                          <FormControl>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(checked) => {
+                                  field.onChange(checked);
+                                }}
+                                className="border-[#E2E8F0] data-[state=checked]:bg-[#0078D4] data-[state=checked]:border-[#0078D4]"
+                              />
+                              <FormLabel
+                                className={cn(
+                                  'text-[13px] cursor-pointer font-normal',
+                                  {
+                                    'text-[#94A3B8]': !field.value,
+                                    'text-[#64748B]': field.value,
+                                  },
+                                )}
+                              >
+                                {t('rememberMe')}
+                              </FormLabel>
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <button
+                      type="button"
+                      className="text-[13px] font-medium text-[#0078D4] hover:underline"
+                    >
+                      Forgot password?
+                    </button>
                   </div>
                 )}
+
+                {/* Submit button */}
+                <ButtonLoading
+                  type="submit"
+                  loading={loading}
+                  className="h-[50px] w-full rounded-lg bg-gradient-to-r from-[#0078D4] to-[#106EBE] text-[15px] font-semibold text-white hover:from-[#106EBE] hover:to-[#0A5EA0] hover:shadow-[0_4px_16px_rgba(0,120,212,0.3)] hover:-translate-y-0.5 transition-all mt-2"
+                >
+                  {title === 'login' ? 'Sign In' : t('continue')}
+                </ButtonLoading>
+
+                {/* SSO channels */}
+                {title === 'login' && channels && channels.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <div className="relative flex items-center gap-3 my-1">
+                      <div className="flex-1 border-t border-[#E2E8F0]" />
+                      <span className="text-[11px] text-[#94A3B8] uppercase tracking-wide">
+                        or continue with
+                      </span>
+                      <div className="flex-1 border-t border-[#E2E8F0]" />
+                    </div>
+                    {channels.map((item) => (
+                      <Button
+                        variant={'outline'}
+                        key={item.channel}
+                        onClick={() => handleLoginWithChannel(item.channel)}
+                        className="w-full h-11 border-[#E2E8F0] text-[#1A202C] hover:bg-[#F4F6F9]"
+                      >
+                        <div className="flex items-center gap-2">
+                          <SvgIcon
+                            name={item.icon || 'sso'}
+                            width={18}
+                            height={18}
+                          />
+                          <span className="text-sm">
+                            Sign in with {item.display_name}
+                          </span>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </form>
+            </Form>
+
+            {/* Toggle login/register */}
+            {title === 'login' && registerEnabled && (
+              <div className="mt-6 text-center">
+                <p className="text-sm text-[#94A3B8]">
+                  {t('signInTip')}
+                  <button
+                    onClick={changeTitle}
+                    className="ml-1 font-medium text-[#0078D4] hover:underline"
+                  >
+                    {t('signUp')}
+                  </button>
+                </p>
               </div>
+            )}
+            {title === 'register' && (
+              <div className="mt-6 text-center">
+                <p className="text-sm text-[#94A3B8]">
+                  {t('signUpTip')}
+                  <button
+                    onClick={changeTitle}
+                    className="ml-1 font-medium text-[#0078D4] hover:underline"
+                  >
+                    {t('login')}
+                  </button>
+                </p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="mt-7 text-center text-xs text-[#94A3B8]">
+              &copy; 2026 Emami Ltd. All rights reserved. Powered by Iksula.
             </div>
-          </FlipCard3D>
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
