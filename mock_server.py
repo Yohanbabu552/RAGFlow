@@ -454,10 +454,38 @@ def admin_audit_events():
 
 
 # ══════════════════════════════════════════════════════════════
-# Stub endpoints (keep frontend from crashing)
+# Knowledge Base / Dataset endpoints (full CRUD + detail)
 # ══════════════════════════════════════════════════════════════
-# ── Knowledge Base / Dataset endpoints ────────────────────────
 MOCK_KBS = []
+# In-memory document store keyed by kb_id
+MOCK_KB_DOCS = {}   # { kb_id: [ {doc}, ... ] }
+
+
+def _make_default_kb(kb_id):
+    """Return a fallback KB object so detail pages never crash."""
+    return {
+        "kb_id": kb_id, "id": kb_id, "name": "Knowledge Base",
+        "description": "", "tenant_id": "tenant-001",
+        "embd_id": "BAAI/bge-large-en-v1.5@Ollama",
+        "parser_id": "naive",
+        "parser_config": {"enable_metadata": False},
+        "permission": "me", "language": "English",
+        "chunk_num": 0, "document_count": 0, "doc_num": 0,
+        "token_num": 0, "chunk_count": 0,
+        "status": "1",
+        "create_time": int(time.time()),
+        "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "update_time": int(time.time()),
+        "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def _find_kb(kb_id):
+    for kb in MOCK_KBS:
+        if kb.get("kb_id") == kb_id or kb.get("id") == kb_id:
+            return kb
+    return None
+
 
 @app.route("/v1/kb/list", methods=["GET", "POST"])
 def kb_list():
@@ -466,61 +494,418 @@ def kb_list():
 
 @app.route("/v1/kb/create", methods=["POST"])
 def kb_create():
-    """Create a new knowledge base."""
     data = request.get_json(silent=True) or {}
     kb_id = str(uuid.uuid4())[:12]
     ts = int(time.time())
     kb = {
-        "kb_id": kb_id,
-        "id": kb_id,
+        "kb_id": kb_id, "id": kb_id,
         "name": data.get("name", "Untitled"),
-        "description": "",
+        "description": data.get("description", ""),
         "tenant_id": "tenant-001",
         "embd_id": data.get("embd_id", "BAAI/bge-large-en-v1.5@Ollama"),
         "parser_id": data.get("parser_id", "naive"),
-        "parser_config": {},
-        "permission": "me",
-        "language": "English",
-        "chunk_num": 0,
-        "document_count": 0,
-        "token_num": 0,
+        "parser_config": data.get("parser_config", {"enable_metadata": False}),
+        "permission": data.get("permission", "me"),
+        "language": data.get("language", "English"),
+        "chunk_num": 0, "document_count": 0, "doc_num": 0,
+        "token_num": 0, "chunk_count": 0,
         "status": "1",
-        "create_time": ts,
-        "update_time": ts,
+        "create_time": ts, "update_time": ts,
+        "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     MOCK_KBS.append(kb)
+    MOCK_KB_DOCS[kb_id] = []
     return ok(kb)
 
 
+@app.route("/v1/kb/detail", methods=["GET"])
+def kb_detail_query():
+    """GET /v1/kb/detail?kb_id=xxx  — used by useFetchKnowledgeBaseConfiguration."""
+    kb_id = request.args.get("kb_id", "")
+    kb = _find_kb(kb_id)
+    return ok(kb if kb else _make_default_kb(kb_id))
+
+
 @app.route("/v1/kb/<kb_id>", methods=["GET"])
-def kb_detail(kb_id):
-    """Get knowledge base details."""
-    for kb in MOCK_KBS:
-        if kb.get("kb_id") == kb_id or kb.get("id") == kb_id:
-            return ok(kb)
-    # Return a default if not found (so the detail page doesn't crash)
-    return ok({
-        "kb_id": kb_id, "id": kb_id, "name": "Knowledge Base",
-        "description": "", "tenant_id": "tenant-001",
-        "embd_id": "BAAI/bge-large-en-v1.5@Ollama",
-        "parser_id": "naive", "parser_config": {},
-        "permission": "me", "language": "English",
-        "chunk_num": 0, "document_count": 0, "token_num": 0,
-        "status": "1", "create_time": int(time.time()), "update_time": int(time.time()),
-    })
+def kb_detail_path(kb_id):
+    """GET /v1/kb/<kb_id>  — alternative path-based detail."""
+    kb = _find_kb(kb_id)
+    return ok(kb if kb else _make_default_kb(kb_id))
+
+
+@app.route("/v1/kb/basic_info", methods=["GET"])
+def kb_basic_info():
+    kb_id = request.args.get("kb_id", "")
+    kb = _find_kb(kb_id)
+    return ok(kb if kb else _make_default_kb(kb_id))
+
+
+@app.route("/v1/kb/get_meta", methods=["GET"])
+def kb_get_meta():
+    return ok({"metadata": {}})
+
+
+@app.route("/v1/kb/check_embedding", methods=["POST"])
+def kb_check_embedding():
+    return ok(True)
 
 
 @app.route("/v1/kb/update", methods=["POST", "PUT"])
 def kb_update():
+    data = request.get_json(silent=True) or {}
+    kb_id = data.get("kb_id", "")
+    kb = _find_kb(kb_id)
+    if kb:
+        for key in ("name", "description", "parser_id", "parser_config",
+                     "permission", "language", "embd_id"):
+            if key in data:
+                kb[key] = data[key]
+        kb["update_time"] = int(time.time())
+        kb["update_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
     return ok(True)
 
 
 @app.route("/v1/kb/rm", methods=["DELETE", "POST"])
 def kb_rm():
+    data = request.get_json(silent=True) or {}
+    kb_id = data.get("kb_id", "")
+    global MOCK_KBS
+    MOCK_KBS = [kb for kb in MOCK_KBS if kb.get("kb_id") != kb_id and kb.get("id") != kb_id]
+    MOCK_KB_DOCS.pop(kb_id, None)
     return ok(True)
 
 
-# ── Dialog / Chat endpoints ───────────────────────────────────
+@app.route("/v1/kb/update_metadata_setting", methods=["POST"])
+def kb_update_metadata_setting():
+    return ok(True)
+
+
+@app.route("/v1/kb/<kb_id>/tags", methods=["GET"])
+def kb_tags(kb_id):
+    return ok([])
+
+
+@app.route("/v1/kb/<kb_id>/rm_tags", methods=["POST"])
+def kb_rm_tags(kb_id):
+    return ok(True)
+
+
+@app.route("/v1/kb/<kb_id>/rename_tag", methods=["POST"])
+def kb_rename_tag(kb_id):
+    return ok(True)
+
+
+@app.route("/v1/kb/tags", methods=["GET"])
+def kb_tags_multi():
+    return ok([])
+
+
+@app.route("/v1/kb/<kb_id>/knowledge_graph", methods=["GET"])
+def kb_knowledge_graph(kb_id):
+    return ok({"graph": {"nodes": [], "edges": []}})
+
+
+@app.route("/v1/kb/run_graphrag", methods=["POST"])
+def kb_run_graphrag():
+    return ok(True)
+
+
+@app.route("/v1/kb/trace_graphrag", methods=["GET"])
+def kb_trace_graphrag():
+    return ok({"status": "idle"})
+
+
+@app.route("/v1/kb/run_raptor", methods=["POST"])
+def kb_run_raptor():
+    return ok(True)
+
+
+@app.route("/v1/kb/trace_raptor", methods=["GET"])
+def kb_trace_raptor():
+    return ok({"status": "idle"})
+
+
+@app.route("/v1/kb/list_pipeline_logs", methods=["POST"])
+def kb_pipeline_logs():
+    return ok({"logs": [], "total": 0})
+
+
+@app.route("/v1/kb/pipeline_log_detail", methods=["GET"])
+def kb_pipeline_log_detail():
+    return ok({})
+
+
+@app.route("/v1/kb/list_pipeline_dataset_logs", methods=["POST"])
+def kb_pipeline_dataset_logs():
+    return ok({"logs": [], "total": 0})
+
+
+@app.route("/v1/kb/unbind_task", methods=["DELETE"])
+def kb_unbind_task():
+    return ok(True)
+
+
+# ══════════════════════════════════════════════════════════════
+# Document endpoints (list, upload, parse, filter, etc.)
+# ══════════════════════════════════════════════════════════════
+@app.route("/v1/document/list", methods=["POST"])
+def document_list():
+    """List documents in a knowledge base — used by useFetchDocumentList."""
+    data = request.get_json(silent=True) or {}
+    kb_id = data.get("kb_id", "")
+    docs = MOCK_KB_DOCS.get(kb_id, [])
+    page = data.get("page", 1)
+    page_size = data.get("page_size", 30)
+    start = (page - 1) * page_size
+    return ok({"docs": docs[start:start + page_size], "total": len(docs)})
+
+
+@app.route("/v1/document/upload", methods=["POST"])
+def document_upload():
+    """Accept file uploads and store mock document records."""
+    kb_id = request.form.get("kb_id", "")
+    if kb_id not in MOCK_KB_DOCS:
+        MOCK_KB_DOCS[kb_id] = []
+    uploaded = []
+    files = request.files.getlist("file")
+    for f in files:
+        doc_id = str(uuid.uuid4())[:12]
+        ts = int(time.time())
+        ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "bin"
+        doc = {
+            "id": doc_id, "doc_id": doc_id,
+            "kb_id": kb_id,
+            "name": f.filename,
+            "location": f.filename,
+            "size": 0,
+            "type": ext,
+            "suffix": f".{ext}",
+            "source_type": "local",
+            "parser_id": "naive",
+            "parser_config": {},
+            "run": "0",
+            "progress": 0.0,
+            "progress_msg": "",
+            "process_begin_at": None,
+            "process_duration": 0,
+            "status": "1",
+            "chunk_num": 0, "token_num": 0,
+            "create_time": ts, "update_time": ts,
+            "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "created_by": MOCK_USER["nickname"],
+            "thumbnail": None,
+        }
+        MOCK_KB_DOCS[kb_id].append(doc)
+        uploaded.append(doc)
+        # Discard actual file content (mock server)
+        f.read()
+    # Update KB doc count
+    kb = _find_kb(kb_id)
+    if kb:
+        kb["document_count"] = len(MOCK_KB_DOCS.get(kb_id, []))
+        kb["doc_num"] = kb["document_count"]
+    return ok(uploaded)
+
+
+@app.route("/v1/document/filter", methods=["POST"])
+def document_filter():
+    """Return available filter options for documents in a KB."""
+    data = request.get_json(silent=True) or {}
+    kb_id = data.get("kb_id", "")
+    docs = MOCK_KB_DOCS.get(kb_id, [])
+    suffixes = {}
+    for d in docs:
+        s = d.get("suffix", "")
+        if s:
+            suffixes[s] = suffixes.get(s, 0) + 1
+    return ok({
+        "filter": {
+            "run_status": {"0": len(docs)},
+            "suffix": suffixes,
+            "metadata": {},
+        }
+    })
+
+
+@app.route("/v1/document/run", methods=["POST"])
+def document_run():
+    """Simulate starting document parsing."""
+    data = request.get_json(silent=True) or {}
+    doc_ids = data.get("doc_ids", [])
+    run_flag = data.get("run", 1)
+    # Mark docs as processing/parsed
+    for docs in MOCK_KB_DOCS.values():
+        for doc in docs:
+            if doc["id"] in doc_ids or doc.get("doc_id") in doc_ids:
+                if run_flag:
+                    doc["run"] = "1"
+                    doc["progress"] = 1.0
+                    doc["progress_msg"] = "Done (mock)"
+                    doc["chunk_num"] = 42
+                    doc["token_num"] = 3200
+                else:
+                    doc["run"] = "0"
+                    doc["progress"] = 0.0
+    return ok(True)
+
+
+@app.route("/v1/document/create", methods=["POST"])
+def document_create():
+    data = request.get_json(silent=True) or {}
+    kb_id = data.get("kb_id", "")
+    doc_id = str(uuid.uuid4())[:12]
+    ts = int(time.time())
+    doc = {
+        "id": doc_id, "doc_id": doc_id, "kb_id": kb_id,
+        "name": data.get("name", "Untitled.txt"),
+        "location": data.get("name", "Untitled.txt"),
+        "size": 0, "type": "txt", "suffix": ".txt",
+        "source_type": "local", "parser_id": "naive", "parser_config": {},
+        "run": "0", "progress": 0.0, "progress_msg": "", "status": "1",
+        "chunk_num": 0, "token_num": 0,
+        "create_time": ts, "update_time": ts,
+        "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "created_by": MOCK_USER["nickname"], "thumbnail": None,
+    }
+    MOCK_KB_DOCS.setdefault(kb_id, []).append(doc)
+    return ok(doc)
+
+
+@app.route("/v1/document/rename", methods=["POST"])
+def document_rename():
+    return ok(True)
+
+
+@app.route("/v1/document/change_status", methods=["POST"])
+def document_change_status():
+    return ok(True)
+
+
+@app.route("/v1/document/rm", methods=["POST"])
+def document_rm():
+    data = request.get_json(silent=True) or {}
+    doc_ids = data.get("doc_ids", data.get("doc_id", []))
+    if isinstance(doc_ids, str):
+        doc_ids = [doc_ids]
+    for kb_id in MOCK_KB_DOCS:
+        MOCK_KB_DOCS[kb_id] = [d for d in MOCK_KB_DOCS[kb_id] if d["id"] not in doc_ids]
+    return ok(True)
+
+
+@app.route("/v1/document/delete", methods=["DELETE"])
+def document_delete():
+    return ok(True)
+
+
+@app.route("/v1/document/change_parser", methods=["POST"])
+def document_change_parser():
+    return ok(True)
+
+
+@app.route("/v1/document/thumbnails", methods=["GET"])
+def document_thumbnails():
+    return ok({})
+
+
+@app.route("/v1/document/get", methods=["GET"])
+def document_get():
+    return ok({})
+
+
+@app.route("/v1/document/download/<doc_id>", methods=["GET"])
+def document_download(doc_id):
+    return ok({})
+
+
+@app.route("/v1/document/web_crawl", methods=["POST"])
+def document_web_crawl():
+    return ok(True)
+
+
+@app.route("/v1/document/infos", methods=["POST"])
+def document_infos():
+    return ok([])
+
+
+@app.route("/v1/document/set_meta", methods=["POST"])
+def document_set_meta():
+    return ok(True)
+
+
+@app.route("/v1/document/parse", methods=["POST"])
+def document_parse():
+    return ok(True)
+
+
+@app.route("/v1/document/upload_info", methods=["POST"])
+def document_upload_info():
+    return ok(True)
+
+
+@app.route("/v1/document/metadata/summary", methods=["POST"])
+def document_metadata_summary():
+    return ok({"metadata": {}})
+
+
+@app.route("/v1/document/metadata/update", methods=["POST"])
+def document_metadata_update():
+    return ok(True)
+
+
+@app.route("/v1/document/update_metadata_setting", methods=["POST"])
+def document_update_metadata_setting():
+    return ok(True)
+
+
+# ══════════════════════════════════════════════════════════════
+# Chunk / Retrieval endpoints
+# ══════════════════════════════════════════════════════════════
+@app.route("/v1/chunk/list", methods=["POST"])
+def chunk_list():
+    return ok({"chunks": [], "total": 0, "doc": {}})
+
+
+@app.route("/v1/chunk/create", methods=["POST"])
+def chunk_create():
+    return ok({"chunk_id": str(uuid.uuid4())[:12]})
+
+
+@app.route("/v1/chunk/set", methods=["POST"])
+def chunk_set():
+    return ok(True)
+
+
+@app.route("/v1/chunk/get", methods=["GET"])
+def chunk_get():
+    return ok({})
+
+
+@app.route("/v1/chunk/switch", methods=["POST"])
+def chunk_switch():
+    return ok(True)
+
+
+@app.route("/v1/chunk/rm", methods=["POST"])
+def chunk_rm():
+    return ok(True)
+
+
+@app.route("/v1/chunk/retrieval_test", methods=["POST"])
+def chunk_retrieval_test():
+    return ok({"chunks": [], "total": 0, "doc_aggs": []})
+
+
+@app.route("/v1/chunk/knowledge_graph", methods=["GET"])
+def chunk_knowledge_graph():
+    return ok({"graph": {"nodes": [], "edges": []}})
+
+
+# ══════════════════════════════════════════════════════════════
+# Dialog / Chat endpoints
+# ══════════════════════════════════════════════════════════════
 @app.route("/v1/dialog/list", methods=["GET"])
 def dialog_list():
     return ok([])
@@ -531,21 +916,38 @@ def dialog_next():
     return ok({"dialogs": [], "total": 0})
 
 
-# ── LLM endpoints (proper mock data) ─────────────────────────
+@app.route("/v1/dialog/create", methods=["POST"])
+def dialog_create():
+    return ok({"id": str(uuid.uuid4())[:12]})
+
+
+@app.route("/v1/dialog/update", methods=["POST", "PUT"])
+def dialog_update():
+    return ok(True)
+
+
+@app.route("/v1/dialog/rm", methods=["DELETE", "POST"])
+def dialog_rm():
+    return ok(True)
+
+
+# ══════════════════════════════════════════════════════════════
+# LLM endpoints — full mock (no real API keys needed)
+# ══════════════════════════════════════════════════════════════
 MOCK_LLM_LIST = {
     "Ollama": [
-        {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "available": True, "fid": "Ollama", "max_tokens": 512},
-        {"llm_name": "qwen2.5:latest", "model_type": "chat", "available": True, "fid": "Ollama", "max_tokens": 8192},
-        {"llm_name": "minicpm-v:latest", "model_type": "image2text", "available": True, "fid": "Ollama", "max_tokens": 4096},
+        {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "available": True, "fid": "Ollama", "max_tokens": 512, "status": "1"},
+        {"llm_name": "qwen2.5:latest", "model_type": "chat", "available": True, "fid": "Ollama", "max_tokens": 8192, "status": "1"},
+        {"llm_name": "minicpm-v:latest", "model_type": "image2text", "available": True, "fid": "Ollama", "max_tokens": 4096, "status": "1"},
     ],
 }
 
 MOCK_LLM_FACTORIES = [
     {"name": "Ollama", "logo": "", "tags": "LLM,TEXT EMBEDDING,IMAGE2TEXT",
      "status": "1", "llm": [
-         {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "tags": "TEXT EMBEDDING"},
-         {"llm_name": "qwen2.5:latest", "model_type": "chat", "tags": "LLM,CHAT"},
-         {"llm_name": "minicpm-v:latest", "model_type": "image2text", "tags": "IMAGE2TEXT,CHAT"},
+         {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "tags": "TEXT EMBEDDING", "status": "1"},
+         {"llm_name": "qwen2.5:latest", "model_type": "chat", "tags": "LLM,CHAT", "status": "1"},
+         {"llm_name": "minicpm-v:latest", "model_type": "image2text", "tags": "IMAGE2TEXT,CHAT", "status": "1"},
      ]},
 ]
 
@@ -565,6 +967,63 @@ def my_llms():
     return ok(MOCK_LLM_LIST)
 
 
+@app.route("/v1/llm/set_api_key", methods=["POST"])
+def llm_set_api_key():
+    """Accept (and ignore) API key saves — no real keys needed for demo."""
+    data = request.get_json(silent=True) or {}
+    factory = data.get("llm_factory", "Unknown")
+    # Add factory to our mock list if not already there
+    if factory not in MOCK_LLM_LIST:
+        MOCK_LLM_LIST[factory] = []
+        MOCK_LLM_FACTORIES.append({
+            "name": factory, "logo": "", "tags": "LLM", "status": "1", "llm": [],
+        })
+    return ok(True)
+
+
+@app.route("/v1/llm/add_llm", methods=["POST"])
+def llm_add():
+    """Add a new LLM model to the mock list."""
+    data = request.get_json(silent=True) or {}
+    factory = data.get("llm_factory", data.get("fid", "Ollama"))
+    model_name = data.get("llm_name", data.get("model_name", "custom-model"))
+    model_type = data.get("model_type", "chat")
+    new_model = {
+        "llm_name": model_name, "model_type": model_type,
+        "available": True, "fid": factory, "max_tokens": 4096, "status": "1",
+    }
+    MOCK_LLM_LIST.setdefault(factory, []).append(new_model)
+    return ok(True)
+
+
+@app.route("/v1/llm/delete_llm", methods=["POST"])
+def llm_delete():
+    return ok(True)
+
+
+@app.route("/v1/llm/enable_llm", methods=["POST"])
+def llm_enable():
+    return ok(True)
+
+
+@app.route("/v1/llm/delete_factory", methods=["POST"])
+def llm_delete_factory():
+    return ok(True)
+
+
+@app.route("/v1/user/set_tenant_info", methods=["POST"])
+def set_tenant_info():
+    """Save system model settings (chat model, embedding model, etc.)."""
+    data = request.get_json(silent=True) or {}
+    for key in ("llm_id", "embd_id", "asr_id", "img2txt_id", "rerank_id", "tts_id", "name"):
+        if key in data:
+            MOCK_TENANT[key] = data[key]
+    return ok(True)
+
+
+# ══════════════════════════════════════════════════════════════
+# System & Misc endpoints
+# ══════════════════════════════════════════════════════════════
 @app.route("/v1/system/config", methods=["GET"])
 def system_config():
     return ok({"registerEnabled": 1, "languages": ["English", "Hindi"]})
@@ -591,9 +1050,24 @@ def conversation_list():
     return ok([])
 
 
+@app.route("/v1/conversation/create", methods=["POST"])
+def conversation_create():
+    return ok({"id": str(uuid.uuid4())[:12]})
+
+
+@app.route("/v1/conversation/delete", methods=["DELETE", "POST"])
+def conversation_delete():
+    return ok(True)
+
+
 @app.route("/v1/file/list", methods=["GET"])
 def file_list():
     return ok({"files": [], "total": 0})
+
+
+@app.route("/v1/file/upload", methods=["POST"])
+def file_upload():
+    return ok(True)
 
 
 @app.route("/v1/search/list", methods=["GET"])
@@ -644,30 +1118,34 @@ def admin_version():
 # ── Catch-all for any other endpoints ──────────────────────────
 @app.route("/v1/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all(path):
-    return ok([])
+    """Return empty but valid data for unknown endpoints."""
+    return ok({})
 
 
 @app.route("/api/v1/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all_api(path):
-    return ok([])
+    return ok({})
 
 
 if __name__ == "__main__":
     print()
     print("=" * 60)
-    print("  RBAC Demo Mock Server (v4 — Fully Connected)")
+    print("  RBAC Demo Mock Server (v5 — Full Dataset + Upload)")
     print("  Listening on http://0.0.0.0:9380")
     print("=" * 60)
     print(f"  User: admin@emami.com (Super Admin)")
     print(f"  Projects: {len(PROJECTS)} | Users: {len(ADMIN_USERS)} | Docs: {len(MOCK_DOCUMENTS)}")
+    print(f"  LLM providers: {list(MOCK_LLM_LIST.keys())} (no real API keys needed)")
     print()
-    print("  Connected endpoints:")
-    print("    /v1/user/*                -> Auth + user info")
+    print("  Endpoints:")
+    print("    /v1/user/*                -> Auth + user info + tenant settings")
     print("    /v1/project/*             -> Project CRUD")
-    print("    /api/v1/admin/users       -> User management")
-    print("    /api/v1/admin/stats       -> System stats")
-    print("    /api/v1/admin/audit/*     -> Audit events")
-    print("    /api/v1/admin/stats/docs  -> Document stats")
+    print("    /v1/kb/*                  -> Dataset CRUD + detail")
+    print("    /v1/document/*            -> Upload, list, parse, filter")
+    print("    /v1/chunk/*               -> Chunk CRUD + retrieval")
+    print("    /v1/llm/*                 -> LLM config (no keys needed)")
+    print("    /v1/dialog/*              -> Chat dialogs")
+    print("    /api/v1/admin/*           -> Admin panel")
     print("=" * 60)
     print()
     app.run(host="0.0.0.0", port=9380, debug=False)
