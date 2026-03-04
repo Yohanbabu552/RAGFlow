@@ -20,7 +20,9 @@ Usage:
 
 import uuid
 import time
-from flask import Flask, request, jsonify
+import io
+import json as _json
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -576,6 +578,119 @@ def _find_kb(kb_id):
     return None
 
 
+def _find_doc(doc_id):
+    """Find a document by id across all KBs."""
+    for kb_id, docs in MOCK_KB_DOCS.items():
+        for doc in docs:
+            if doc.get("id") == doc_id or doc.get("doc_id") == doc_id:
+                return doc
+    return None
+
+
+def _generate_mock_pdf(title, content_lines):
+    """Generate a minimal valid PDF document with text content.
+
+    Uses raw PDF specification — no external libraries required.
+    Returns bytes suitable for send_file().
+    """
+    # Escape special PDF characters in text
+    def esc(s):
+        return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    # Build text drawing operators
+    ops = f"BT /F1 18 Tf 72 740 Td ({esc(title)}) Tj ET\n"
+    ops += "BT /F1 10 Tf 72 710 Td (Generated mock document for demo purposes) Tj ET\n"
+    ops += "BT /F1 10 Tf 72 695 Td (This simulates the original document content.) Tj ET\n"
+    y = 665
+    for line in content_lines:
+        if y < 60:
+            break
+        ops += f"BT /F1 10 Tf 72 {y} Td ({esc(line)}) Tj ET\n"
+        y -= 16
+
+    stream_bytes = ops.encode("latin-1")
+    slen = len(stream_bytes)
+
+    # Build PDF objects
+    objs = []
+    objs.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+    objs.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+    objs.append(b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
+                b" /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n")
+    objs.append(b"4 0 obj\n<< /Length " + str(slen).encode() + b" >>\nstream\n"
+                + stream_bytes + b"\nendstream\nendobj\n")
+    objs.append(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
+
+    # Assemble
+    pdf = b"%PDF-1.4\n"
+    offsets = []
+    for obj in objs:
+        offsets.append(len(pdf))
+        pdf += obj
+
+    # Cross-reference table
+    xref_off = len(pdf)
+    pdf += b"xref\n"
+    pdf += f"0 {len(objs) + 1}\n".encode()
+    pdf += b"0000000000 65535 f \n"
+    for off in offsets:
+        pdf += f"{off:010d} 00000 n \n".encode()
+
+    pdf += b"trailer\n"
+    pdf += f"<< /Root 1 0 R /Size {len(objs) + 1} >>\n".encode()
+    pdf += b"startxref\n"
+    pdf += f"{xref_off}\n".encode()
+    pdf += b"%%EOF\n"
+
+    return pdf
+
+
+# Pre-built mock PDF content per document (lazy-cached)
+_PDF_CACHE = {}
+
+
+def _get_mock_pdf_for_doc(doc):
+    """Return (or generate and cache) a mock PDF for a document."""
+    doc_id = doc["id"]
+    if doc_id not in _PDF_CACHE:
+        title = doc.get("name", "Document")
+        lines = [
+            f"Document: {title}",
+            f"Knowledge Base: {doc.get('kb_id', 'N/A')}",
+            f"Size: {doc.get('size', 0):,} bytes",
+            f"Type: {doc.get('type', 'unknown')}",
+            "",
+            "--- Document Content ---",
+            "",
+            "Section 1: Overview",
+            f"This document titled '{title}' contains important information",
+            "that has been processed and indexed for AI-powered retrieval.",
+            "",
+            "Section 2: Key Information",
+            "The content has been parsed into chunks for efficient search",
+            "and question-answering capabilities.",
+            f"Total chunks generated: {doc.get('chunk_num', 0)}",
+            f"Total tokens processed: {doc.get('token_num', 0)}",
+            "",
+            "Section 3: Product Details" if "Product" in title else "Section 3: Policy Details",
+            "Emami Limited is a leading FMCG company with a diverse portfolio",
+            "of personal care and healthcare products including BoroPlus,",
+            "Navratna Oil, Fair and Handsome, Zandu Balm, and Kesh King.",
+            "",
+            "Section 4: Quality Standards",
+            "All products undergo rigorous quality testing and comply with",
+            "international safety and regulatory standards.",
+            "",
+            "Section 5: Distribution Network",
+            "Products are distributed through 600,000+ retail outlets across",
+            "India and exported to over 60 countries worldwide.",
+            "",
+            "--- End of Document ---",
+        ]
+        _PDF_CACHE[doc_id] = _generate_mock_pdf(title, lines)
+    return _PDF_CACHE[doc_id]
+
+
 @app.route("/v1/kb/list", methods=["GET", "POST"])
 def kb_list():
     return ok({"kbs": MOCK_KBS, "total": len(MOCK_KBS)})
@@ -956,17 +1071,117 @@ def document_change_parser():
 
 @app.route("/v1/document/thumbnails", methods=["GET"])
 def document_thumbnails():
-    return ok({})
+    """Return thumbnail info for documents.
+
+    The frontend calls this to get small preview images for documents.
+    Query param: doc_ids (comma-separated list of doc IDs).
+    Returns { doc_id: thumbnail_base64_or_null }.
+    """
+    doc_ids_str = request.args.get("doc_ids", "")
+    doc_ids = [d.strip() for d in doc_ids_str.split(",") if d.strip()] if doc_ids_str else []
+    result = {}
+    for did in doc_ids:
+        # No real thumbnails in mock — return None so frontend falls back to file icon
+        result[did] = None
+    return ok(result)
 
 
-@app.route("/v1/document/get", methods=["GET"])
-def document_get():
-    return ok({})
+@app.route("/v1/document/get/<doc_id>", methods=["GET"])
+def document_get(doc_id):
+    """Serve actual document content for the PDF/document viewer.
+
+    The frontend passes this URL directly to pdf.js (for PDFs) or
+    window.open (for other file types).  It expects BINARY file content,
+    NOT a JSON envelope.
+    """
+    doc = _find_doc(doc_id)
+    if not doc:
+        return Response(b"Document not found", status=404, content_type="text/plain")
+
+    doc_type = doc.get("type", "pdf")
+
+    if doc_type == "pdf":
+        pdf_bytes = _get_mock_pdf_for_doc(doc)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=False,
+            download_name=doc.get("name", "document.pdf"),
+        )
+    else:
+        # For non-PDF files, return an HTML preview page
+        title = doc.get("name", "Document")
+        html = f"""<!DOCTYPE html>
+<html><head><title>{title}</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }}
+h1 {{ color: #1F3864; border-bottom: 2px solid #0078D4; padding-bottom: 10px; }}
+.meta {{ color: #666; margin-bottom: 20px; }}
+.content {{ line-height: 1.8; }}
+</style></head>
+<body>
+<h1>{title}</h1>
+<div class="meta">
+  <p>Type: {doc_type.upper()} | Size: {doc.get('size', 0):,} bytes | Chunks: {doc.get('chunk_num', 0)}</p>
+</div>
+<div class="content">
+<h2>Document Preview</h2>
+<p>This is a mock preview of <strong>{title}</strong>. In a production environment,
+the actual document content would be displayed here.</p>
+<h3>Key Information</h3>
+<p>This document has been processed and indexed by the RAGFlow system.
+It contains {doc.get('chunk_num', 0)} chunks and {doc.get('token_num', 0)} tokens.</p>
+<h3>Sample Content</h3>
+<p>Emami Limited products include BoroPlus, Navratna Oil, Fair and Handsome,
+Zandu Balm, and Kesh King — all meeting international quality standards.</p>
+</div>
+</body></html>"""
+        return Response(html, content_type="text/html; charset=utf-8")
 
 
 @app.route("/v1/document/download/<doc_id>", methods=["GET"])
 def document_download(doc_id):
-    return ok({})
+    """Serve document for download."""
+    doc = _find_doc(doc_id)
+    if not doc:
+        return Response(b"Document not found", status=404, content_type="text/plain")
+
+    doc_type = doc.get("type", "pdf")
+    if doc_type == "pdf":
+        pdf_bytes = _get_mock_pdf_for_doc(doc)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=doc.get("name", "document.pdf"),
+        )
+    else:
+        # Non-PDF: serve a simple text representation
+        content = f"Mock content for {doc.get('name', 'document')}\n"
+        return send_file(
+            io.BytesIO(content.encode("utf-8")),
+            mimetype="application/octet-stream",
+            as_attachment=True,
+            download_name=doc.get("name", "document.txt"),
+        )
+
+
+@app.route("/v1/document/image/<image_id>", methods=["GET"])
+def document_image(image_id):
+    """Serve an embedded image from a document chunk.
+
+    The frontend references images via image_id in reference chunks.
+    Returns a small placeholder SVG since we have no real images.
+    """
+    # Return a minimal SVG placeholder
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150">'
+        '<rect width="200" height="150" fill="#f0f0f0"/>'
+        '<text x="100" y="75" text-anchor="middle" fill="#999" '
+        'font-family="Arial" font-size="12">Image Preview</text>'
+        '</svg>'
+    )
+    return Response(svg, content_type="image/svg+xml")
 
 
 @app.route("/v1/document/web_crawl", methods=["POST"])
@@ -976,7 +1191,21 @@ def document_web_crawl():
 
 @app.route("/v1/document/infos", methods=["POST"])
 def document_infos():
-    return ok([])
+    """Return metadata for a batch of documents.
+
+    POST body: { "doc_ids": ["id1", "id2", ...] }
+    Returns array of document info objects.
+    """
+    data = request.get_json(silent=True) or {}
+    doc_ids = data.get("doc_ids", [])
+    if isinstance(doc_ids, str):
+        doc_ids = [d.strip() for d in doc_ids.split(",") if d.strip()]
+    result = []
+    for did in doc_ids:
+        doc = _find_doc(did)
+        if doc:
+            result.append(doc)
+    return ok(result)
 
 
 @app.route("/v1/document/set_meta", methods=["POST"])
@@ -1375,6 +1604,9 @@ def conversation_completion():
     Real RAGFlow format: data:{"code":0,"message":"","data":{"answer":"...","reference":{...}}}
     Final event:         data:{"code":0,"message":"","data":true}
     The frontend (useSendMessageWithSse) reads .data.answer and accumulates chunks.
+
+    CRITICAL: The answer text MUST include reference markers like ##0$$ (old format)
+    which the frontend converts to [ID:0] and renders as clickable "Fig. 1" badges.
     """
     data = request.get_json(silent=True) or {}
     conv_id = data.get("conversation_id", "")
@@ -1392,55 +1624,111 @@ def conversation_completion():
         c = MOCK_CONVERSATIONS[conv_id]
         c["message"].append({"id": str(uuid.uuid4())[:12], "content": user_msg, "role": "user"})
 
-    # Build a mock AI answer
+    # Build reference data from the dialog's linked knowledge bases
+    ref_chunks = []
+    ref_doc_aggs = []
+    ref_doc_names = []
+    if conv_id and conv_id in MOCK_CONVERSATIONS:
+        dialog_id = MOCK_CONVERSATIONS[conv_id].get("dialog_id", "")
+        dialog = MOCK_DIALOGS.get(dialog_id, {})
+        kb_ids = dialog.get("kb_ids", [])
+        chunk_idx = 0
+        for kb_id in kb_ids:
+            for doc in MOCK_KB_DOCS.get(kb_id, [])[:2]:  # up to 2 docs per KB
+                doc_name = doc.get("name", "Document")
+                ref_doc_names.append(doc_name)
+
+                # Mock chunk content — realistic text for the popover
+                chunk_content = (
+                    f"<p>This section from <b>{doc_name}</b> contains relevant information "
+                    f"about Emami's product portfolio and business operations. The document "
+                    f"covers key aspects including product specifications, quality standards, "
+                    f"and market distribution strategies.</p>"
+                )
+
+                # PDF page positions for highlighting: [page, x1, x2, y1, y2]
+                # These map to the mock PDF we generate (page 1, various y positions)
+                positions = [
+                    [1, 72, 540, 665, 697],   # Section 1 area
+                    [1, 72, 540, 569, 601],   # Section 3 area
+                ]
+
+                ref_chunks.append({
+                    "id": f"chunk-{doc['id']}-{chunk_idx:03d}",
+                    "content": chunk_content,
+                    "content_with_weight": chunk_content,
+                    "document_id": doc["id"],
+                    "document_name": doc_name,
+                    "dataset_id": kb_id,
+                    "image_id": "",
+                    "similarity": round(0.92 - chunk_idx * 0.03, 2),
+                    "vector_similarity": round(0.89 - chunk_idx * 0.02, 2),
+                    "term_similarity": round(0.94 - chunk_idx * 0.04, 2),
+                    "positions": positions,
+                    "doc_type": doc.get("type", "pdf"),
+                })
+                ref_doc_aggs.append({
+                    "count": 1,
+                    "doc_id": doc["id"],
+                    "doc_name": doc_name,
+                })
+                chunk_idx += 1
+
+    # Build a mock AI answer WITH reference markers (##N$$)
+    # The frontend regex /(#{2}\d+\${2})/g converts these to [ID:N] → rendered as "Fig. N+1"
+    ref_markers = ""
+    if ref_chunks:
+        # Insert reference markers at the end of key sentences
+        markers = " ".join(f"##{i}$$" for i in range(len(ref_chunks)))
+        ref_markers = f" {markers}"
+
     mock_answer = (
         f"Based on the documents in your knowledge base, here is what I found regarding your query:\n\n"
         f"**Summary:** The information related to \"{user_msg[:80]}\" indicates that the relevant data "
-        f"has been processed and indexed. The key findings from the uploaded documents suggest "
-        f"comprehensive coverage of this topic.\n\n"
-        f"*Source: Knowledge Base Documents*"
+        f"has been processed and indexed successfully.{ref_markers}\n\n"
+        f"The key findings from the uploaded documents suggest comprehensive coverage of this topic. "
+    )
+    if len(ref_chunks) > 0:
+        mock_answer += f"The primary source is **{ref_doc_names[0]}** ##0$$ "
+    if len(ref_chunks) > 1:
+        mock_answer += f"with supporting data from **{ref_doc_names[1]}** ##1$$ "
+    mock_answer += (
+        f"\n\n**Key Points:**\n"
+        f"- Document processing completed with high confidence scores\n"
+        f"- All referenced sections have been verified against the knowledge base\n"
+        f"- The information is sourced from {len(ref_chunks)} document chunks across "
+        f"{len(ref_doc_aggs)} documents"
     )
 
     msg_id = str(uuid.uuid4())[:12]
 
-    # Store assistant message
+    # Build the reference object for this message
+    msg_reference = {
+        "chunks": ref_chunks,
+        "doc_aggs": ref_doc_aggs,
+        "total": len(ref_chunks),
+    } if ref_chunks else {}
+
+    # Store assistant message in conversation (with reference)
     if conv_id and conv_id in MOCK_CONVERSATIONS:
         c = MOCK_CONVERSATIONS[conv_id]
-        c["message"].append({"id": msg_id, "content": mock_answer, "role": "assistant"})
+        c["message"].append({
+            "id": msg_id,
+            "content": mock_answer,
+            "role": "assistant",
+            "reference": msg_reference,
+        })
+        # Also store in conversation-level reference array
+        # (buildMessageItemReference falls back to conversation.reference[index])
+        if "reference" not in c:
+            c["reference"] = []
+        c["reference"].append(msg_reference)
         c["is_new"] = False
         c["update_time"] = int(time.time())
         if user_msg:
             c["name"] = user_msg[:40]
 
-    # Build reference data from the dialog's linked knowledge bases
-    ref_chunks = []
-    ref_doc_aggs = []
-    if conv_id and conv_id in MOCK_CONVERSATIONS:
-        dialog_id = MOCK_CONVERSATIONS[conv_id].get("dialog_id", "")
-        dialog = MOCK_DIALOGS.get(dialog_id, {})
-        kb_ids = dialog.get("kb_ids", [])
-        for kb_id in kb_ids:
-            for doc in MOCK_KB_DOCS.get(kb_id, [])[:2]:  # up to 2 docs per KB
-                ref_chunks.append({
-                    "id": f"chunk-{doc['id']}-001",
-                    "content": f"Relevant content from {doc['name']}",
-                    "document_id": doc["id"],
-                    "document_name": doc["name"],
-                    "dataset_id": kb_id,
-                    "image_id": "",
-                    "similarity": 0.85,
-                    "vector_similarity": 0.82,
-                    "term_similarity": 0.88,
-                    "positions": [],
-                })
-                ref_doc_aggs.append({
-                    "count": 1, "doc_id": doc["id"], "doc_name": doc["name"],
-                })
-
-    # Return SSE stream in the REAL RAGFlow format:
-    # data:{"code":0,"message":"","data":{"answer":"...","reference":{...}}}
-    import json as _json
-
+    # Return SSE stream in the REAL RAGFlow format
     def generate():
         # Stream the answer in chunks (simulating real streaming)
         words = mock_answer.split(" ")
@@ -1465,11 +1753,7 @@ def conversation_completion():
             "message": "",
             "data": {
                 "answer": mock_answer,
-                "reference": {
-                    "chunks": ref_chunks,
-                    "doc_aggs": ref_doc_aggs,
-                    "total": len(ref_chunks),
-                },
+                "reference": msg_reference,
                 "audio_binary": None,
                 "id": msg_id,
             },
@@ -1479,7 +1763,6 @@ def conversation_completion():
         # End signal
         yield f"data:{_json.dumps({'code': 0, 'message': '', 'data': True})}\n\n"
 
-    from flask import Response
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
