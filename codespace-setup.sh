@@ -14,6 +14,62 @@ echo "============================================================"
 echo "  RAGFlow Codespace Setup — Starting..."
 echo "============================================================"
 
+# ------ Step 0: Create docker/.env if missing (not tracked by git) ------
+if [ ! -f "$PROJECT_ROOT/docker/.env" ]; then
+  echo ""
+  echo "[0] Creating docker/.env (excluded from git)..."
+  cat > "$PROJECT_ROOT/docker/.env" <<'ENVFILE'
+DOC_ENGINE=elasticsearch
+DEVICE=cpu
+COMPOSE_PROFILES=elasticsearch,cpu
+STACK_VERSION=8.11.3
+ES_HOST=es01
+ES_PORT=1200
+ELASTIC_PASSWORD=infini_rag_flow
+OS_PORT=1201
+OS_HOST=opensearch01
+OPENSEARCH_PASSWORD=infini_rag_flow_OS_01
+MEM_LIMIT=419430400
+INFINITY_HOST=infinity
+INFINITY_THRIFT_PORT=23817
+INFINITY_HTTP_PORT=23820
+INFINITY_PSQL_PORT=5432
+MYSQL_PASSWORD=infini_rag_flow
+MYSQL_HOST=mysql
+MYSQL_DBNAME=rag_flow
+MYSQL_PORT=3306
+EXPOSE_MYSQL_PORT=5455
+MYSQL_MAX_PACKET=1073741824
+MINIO_HOST=minio
+MINIO_CONSOLE_PORT=9001
+MINIO_PORT=9000
+MINIO_USER=rag_flow
+MINIO_PASSWORD=infini_rag_flow
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=infini_rag_flow
+SVR_WEB_HTTP_PORT=80
+SVR_WEB_HTTPS_PORT=443
+SVR_HTTP_PORT=9380
+ADMIN_SVR_HTTP_PORT=9381
+SVR_MCP_PORT=9382
+RAGFLOW_IMAGE=infiniflow/ragflow:v0.24.0
+TEI_IMAGE_CPU=infiniflow/text-embeddings-inference:cpu-1.8
+TEI_IMAGE_GPU=infiniflow/text-embeddings-inference:1.8
+TEI_MODEL=Qwen/Qwen3-Embedding-0.6B
+TEI_HOST=tei
+TEI_PORT=6380
+TZ=Asia/Kolkata
+REGISTER_ENABLED=1
+DOC_BULK_SIZE=1
+EMBEDDING_BATCH_SIZE=4
+DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+THREAD_POOL_MAX_WORKERS=16
+USE_DOCLING=false
+ENVFILE
+  echo "    ✅ docker/.env created"
+fi
+
 # ------ Step 1: Start infrastructure services via Docker ------
 echo ""
 echo "[1/6] Starting infrastructure services (MySQL, Redis, ES, MinIO)..."
@@ -25,7 +81,6 @@ source .env
 set +a
 
 # Start only the services we need (elasticsearch profile + cpu)
-# Use --profile to select only elasticsearch and cpu services
 docker compose -f docker-compose-base.yml --profile elasticsearch --profile cpu up -d mysql redis es01 minio
 
 echo "    Waiting for MySQL to be healthy..."
