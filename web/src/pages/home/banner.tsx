@@ -1,5 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowRight, X } from 'lucide-react';
+import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
+import { getEffectiveRole, isSuperAdmin } from '@/utils/rbac-util';
+import { ArrowRight, Crown, FolderKanban, Shield, User, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 function BannerCard() {
@@ -41,12 +43,53 @@ export function Banner() {
 
 export function NextBanner() {
   const { t } = useTranslation();
+  const { data: userInfo } = useFetchUserInfo();
+  const isAdmin = isSuperAdmin(userInfo);
+  const effectiveRole = getEffectiveRole(userInfo);
+  const projectCount = userInfo?.project_roles?.length || 0;
+
+  const getRoleInfo = () => {
+    switch (effectiveRole) {
+      case 'super_admin':
+        return { icon: Crown, label: 'Super Admin', color: 'from-amber-400 to-orange-500' };
+      case 'project_admin':
+        return { icon: Shield, label: 'Project Admin', color: 'from-blue-400 to-indigo-500' };
+      case 'member':
+        return { icon: User, label: 'Member', color: 'from-emerald-400 to-teal-500' };
+      default:
+        return null;
+    }
+  };
+
+  const roleInfo = getRoleInfo();
+
   return (
-    <section className="text-5xl pt-10 pb-14 font-bold px-10">
-      <span className="text-text-primary">{t('header.welcome')}</span>
-      <span className="pl-3 text-transparent bg-clip-text  bg-gradient-to-l from-[#40EBE3] to-[#4A51FF]">
-        RAGFlow
-      </span>
+    <section className="pt-10 pb-14 px-10">
+      <div className="text-5xl font-bold">
+        <span className="text-text-primary">{t('header.welcome')}</span>
+        <span className="pl-3 text-transparent bg-clip-text bg-gradient-to-l from-[#40EBE3] to-[#4A51FF]">
+          RAGFlow
+        </span>
+      </div>
+      {/* RBAC Quick Status Bar */}
+      {roleInfo && (
+        <div className="mt-4 flex items-center gap-4">
+          <div
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-gradient-to-r ${roleInfo.color}`}
+          >
+            <roleInfo.icon className="size-3.5" />
+            {roleInfo.label}
+          </div>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <FolderKanban className="size-4" />
+            <span>
+              {isAdmin
+                ? 'Full access to all projects'
+                : `${projectCount} project${projectCount !== 1 ? 's' : ''} assigned`}
+            </span>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

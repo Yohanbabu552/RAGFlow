@@ -2,12 +2,14 @@
 Lightweight mock API server for RBAC UI demo.
 
 Fakes just enough endpoints for the frontend to render:
-- /v1/user/info       → returns a Super Admin user
-- /v1/user/login      → returns a fake token
-- /v1/project/*       → CRUD for projects (in-memory)
-- /v1/kb/list         → empty dataset list
-- /v1/dialog/*        → empty chat list
-- /v1/user/tenant_info → tenant info
+- /v1/user/info       -> returns a Super Admin user with project_roles
+- /v1/user/login      -> returns a fake token
+- /v1/project/*       -> CRUD for projects (in-memory)
+- /v1/kb/list         -> empty dataset list
+- /v1/dialog/*        -> empty chat list
+- /v1/user/tenant_info -> tenant info
+
+Pre-seeded with 3 demo projects to show RBAC features.
 
 Usage:
     pip install flask flask-cors
@@ -60,8 +62,134 @@ MOCK_TENANT = {
     "role": "owner",
 }
 
-PROJECTS = {}
-PROJECT_USERS = {}
+# ── Pre-seeded demo projects ──────────────────────────────────
+ts_now = int(time.time())
+
+PROJECTS = {
+    "proj-001": {
+        "id": "proj-001",
+        "tenant_id": "tenant-001",
+        "name": "Emami Product Catalog",
+        "description": "AI-powered product catalog with document intelligence for Emami's product line.",
+        "created_by": "usr-super-admin-001",
+        "status": "1",
+        "create_time": ts_now,
+        "update_time": ts_now,
+    },
+    "proj-002": {
+        "id": "proj-002",
+        "tenant_id": "tenant-001",
+        "name": "HR Policy Assistant",
+        "description": "Internal HR knowledge base for employee onboarding and policy queries.",
+        "created_by": "usr-super-admin-001",
+        "status": "1",
+        "create_time": ts_now,
+        "update_time": ts_now,
+    },
+    "proj-003": {
+        "id": "proj-003",
+        "tenant_id": "tenant-001",
+        "name": "R&D Research Papers",
+        "description": "Research document management and Q&A for the R&D division.",
+        "created_by": "usr-super-admin-001",
+        "status": "1",
+        "create_time": ts_now,
+        "update_time": ts_now,
+    },
+}
+
+PROJECT_USERS = {
+    "proj-001": [
+        {
+            "id": "pu-001",
+            "user_id": "usr-super-admin-001",
+            "project_id": "proj-001",
+            "role": "admin",
+            "assigned_by": "usr-super-admin-001",
+            "email": "admin@emami.com",
+            "nickname": "Super Admin",
+            "avatar": "",
+            "is_superuser": True,
+            "is_active": "1",
+            "create_time": ts_now,
+            "update_time": ts_now,
+        },
+        {
+            "id": "pu-002",
+            "user_id": "usr-proj-admin-001",
+            "project_id": "proj-001",
+            "role": "admin",
+            "assigned_by": "usr-super-admin-001",
+            "email": "rahul@emami.com",
+            "nickname": "Rahul Sharma",
+            "avatar": "",
+            "is_superuser": False,
+            "is_active": "1",
+            "create_time": ts_now,
+            "update_time": ts_now,
+        },
+        {
+            "id": "pu-003",
+            "user_id": "usr-member-001",
+            "project_id": "proj-001",
+            "role": "member",
+            "assigned_by": "usr-super-admin-001",
+            "email": "priya@emami.com",
+            "nickname": "Priya Patel",
+            "avatar": "",
+            "is_superuser": False,
+            "is_active": "1",
+            "create_time": ts_now,
+            "update_time": ts_now,
+        },
+    ],
+    "proj-002": [
+        {
+            "id": "pu-004",
+            "user_id": "usr-super-admin-001",
+            "project_id": "proj-002",
+            "role": "admin",
+            "assigned_by": "usr-super-admin-001",
+            "email": "admin@emami.com",
+            "nickname": "Super Admin",
+            "avatar": "",
+            "is_superuser": True,
+            "is_active": "1",
+            "create_time": ts_now,
+            "update_time": ts_now,
+        },
+        {
+            "id": "pu-005",
+            "user_id": "usr-member-002",
+            "project_id": "proj-002",
+            "role": "member",
+            "assigned_by": "usr-super-admin-001",
+            "email": "amit@emami.com",
+            "nickname": "Amit Kumar",
+            "avatar": "",
+            "is_superuser": False,
+            "is_active": "1",
+            "create_time": ts_now,
+            "update_time": ts_now,
+        },
+    ],
+    "proj-003": [
+        {
+            "id": "pu-006",
+            "user_id": "usr-super-admin-001",
+            "project_id": "proj-003",
+            "role": "admin",
+            "assigned_by": "usr-super-admin-001",
+            "email": "admin@emami.com",
+            "nickname": "Super Admin",
+            "avatar": "",
+            "is_superuser": True,
+            "is_active": "1",
+            "create_time": ts_now,
+            "update_time": ts_now,
+        },
+    ],
+}
 
 
 def ok(data=None, message="success"):
@@ -75,7 +203,7 @@ def err(message="error", code=100):
 # ── Auth endpoints ─────────────────────────────────────────────
 @app.route("/v1/user/info", methods=["GET"])
 def user_info():
-    # Include project_roles
+    # Include project_roles dynamically from current PROJECTS
     user = dict(MOCK_USER)
     user["project_roles"] = []
     for pid, proj in PROJECTS.items():
@@ -333,11 +461,21 @@ def catch_all_api(path):
 if __name__ == "__main__":
     print()
     print("=" * 60)
-    print("  RBAC Demo Mock Server")
+    print("  RBAC Demo Mock Server (v2 — Pre-seeded)")
     print("  Listening on http://0.0.0.0:9380")
     print("=" * 60)
-    print("  User: admin@emami.com (Super Admin)")
-    print("  Go to /projects to see the RBAC feature")
+    print(f"  User: admin@emami.com (Super Admin)")
+    print(f"  Pre-seeded projects: {len(PROJECTS)}")
+    for pid, proj in PROJECTS.items():
+        users_count = len(PROJECT_USERS.get(pid, []))
+        print(f"    - {proj['name']} ({users_count} users)")
+    print()
+    print("  RBAC Features visible across:")
+    print("    - Home page: Role badge + Projects overview")
+    print("    - Header: Role badge + User dropdown with role info")
+    print("    - Projects tab: Full project management")
+    print("    - Datasets: Project filter bar")
+    print("    - Team Settings: My Role & Access section")
     print("=" * 60)
     print()
     app.run(host="0.0.0.0", port=9380, debug=False)
