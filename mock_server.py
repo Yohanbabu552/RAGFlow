@@ -1025,8 +1025,8 @@ def dialog_set():
         return ok(d)
     else:
         # Create new
-        new_id = data.get("dialog_id") or str(uuid.uuid4())[:12]
-        name = data.get("name", "Untitled Chat")
+        new_id = data.pop("dialog_id", None) or str(uuid.uuid4())[:12]
+        name = data.pop("name", "Untitled Chat")
         d = _make_dialog(new_id, name, **data)
         MOCK_DIALOGS[new_id] = d
         return ok(d)
