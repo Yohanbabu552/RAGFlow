@@ -588,61 +588,87 @@ def _find_doc(doc_id):
 
 
 def _generate_mock_pdf(title, content_lines):
-    """Generate a minimal valid PDF document with text content.
+    """Generate a valid PDF document using BytesIO with exact offset tracking.
 
-    Uses raw PDF specification — no external libraries required.
-    Returns bytes suitable for send_file().
+    Uses io.BytesIO.tell() for bulletproof xref offset calculation.
+    Compatible with pdf.js / react-pdf-highlighter.
     """
-    # Escape special PDF characters in text
     def esc(s):
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    # Build text drawing operators
-    ops = f"BT /F1 18 Tf 72 740 Td ({esc(title)}) Tj ET\n"
-    ops += "BT /F1 10 Tf 72 710 Td (Generated mock document for demo purposes) Tj ET\n"
-    ops += "BT /F1 10 Tf 72 695 Td (This simulates the original document content.) Tj ET\n"
-    y = 665
+    buf = io.BytesIO()
+    offsets = {}  # object_number -> byte_offset
+
+    # ── Header ──
+    buf.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")  # binary comment for PDF tools
+
+    # ── Object 1: Catalog ──
+    offsets[1] = buf.tell()
+    buf.write(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+
+    # ── Object 2: Pages ──
+    offsets[2] = buf.tell()
+    buf.write(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+
+    # ── Object 5: Font (write before page so we know the ref works) ──
+    offsets[5] = buf.tell()
+    buf.write(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
+
+    # ── Build content stream ──
+    ops = ""
+    # Title
+    ops += "BT\n/F1 18 Tf\n72 740 Td\n(%s) Tj\nET\n" % esc(title)
+    # Subtitle
+    ops += "BT\n/F1 9 Tf\n72 718 Td\n(Mock document generated for demo) Tj\nET\n"
+    # Horizontal rule
+    ops += "0.8 0.8 0.8 RG\n0.5 w\n72 710 m 540 710 l S\n"
+    # Content lines
+    y = 695
     for line in content_lines:
-        if y < 60:
+        if y < 50:
             break
-        ops += f"BT /F1 10 Tf 72 {y} Td ({esc(line)}) Tj ET\n"
-        y -= 16
+        if line == "":
+            y -= 8
+            continue
+        ops += "BT\n/F1 10 Tf\n72 %d Td\n(%s) Tj\nET\n" % (y, esc(line))
+        y -= 14
 
-    stream_bytes = ops.encode("latin-1")
-    slen = len(stream_bytes)
+    stream_data = ops.encode("latin-1")
 
-    # Build PDF objects
-    objs = []
-    objs.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    objs.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    objs.append(b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
-                b" /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n")
-    objs.append(b"4 0 obj\n<< /Length " + str(slen).encode() + b" >>\nstream\n"
-                + stream_bytes + b"\nendstream\nendobj\n")
-    objs.append(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
+    # ── Object 4: Content stream ──
+    offsets[4] = buf.tell()
+    buf.write(b"4 0 obj\n<< /Length %d >>\nstream\n" % len(stream_data))
+    buf.write(stream_data)
+    buf.write(b"\nendstream\nendobj\n")
 
-    # Assemble
-    pdf = b"%PDF-1.4\n"
-    offsets = []
-    for obj in objs:
-        offsets.append(len(pdf))
-        pdf += obj
+    # ── Object 3: Page ──
+    offsets[3] = buf.tell()
+    buf.write(
+        b"3 0 obj\n"
+        b"<< /Type /Page /Parent 2 0 R\n"
+        b"   /MediaBox [0 0 612 792]\n"
+        b"   /Contents 4 0 R\n"
+        b"   /Resources << /Font << /F1 5 0 R >> >> >>\n"
+        b"endobj\n"
+    )
 
-    # Cross-reference table
-    xref_off = len(pdf)
-    pdf += b"xref\n"
-    pdf += f"0 {len(objs) + 1}\n".encode()
-    pdf += b"0000000000 65535 f \n"
-    for off in offsets:
-        pdf += f"{off:010d} 00000 n \n".encode()
+    # ── Cross-reference table ──
+    # CRITICAL: Each xref entry MUST be exactly 20 bytes including EOL.
+    # Format: "OOOOOOOOOO GGGGG X\r\n" = 10+1+5+1+1+1+1 = 20 bytes
+    xref_offset = buf.tell()
+    buf.write(b"xref\n")
+    buf.write(b"0 6\n")
+    buf.write(b"0000000000 65535 f\r\n")  # free entry, exactly 20 bytes
+    for obj_num in range(1, 6):
+        buf.write(("%010d 00000 n\r\n" % offsets[obj_num]).encode("ascii"))
 
-    pdf += b"trailer\n"
-    pdf += f"<< /Root 1 0 R /Size {len(objs) + 1} >>\n".encode()
-    pdf += b"startxref\n"
-    pdf += f"{xref_off}\n".encode()
-    pdf += b"%%EOF\n"
+    # ── Trailer ──
+    buf.write(b"trailer\n<< /Size 6 /Root 1 0 R >>\n")
+    buf.write(b"startxref\n")
+    buf.write(("%d\n" % xref_offset).encode("ascii"))
+    buf.write(b"%%EOF\n")
 
-    return pdf
+    return buf.getvalue()
 
 
 # Pre-built mock PDF content per document (lazy-cached)
@@ -655,35 +681,35 @@ def _get_mock_pdf_for_doc(doc):
     if doc_id not in _PDF_CACHE:
         title = doc.get("name", "Document")
         lines = [
-            f"Document: {title}",
-            f"Knowledge Base: {doc.get('kb_id', 'N/A')}",
-            f"Size: {doc.get('size', 0):,} bytes",
-            f"Type: {doc.get('type', 'unknown')}",
+            "Document: %s" % title,
+            "Knowledge Base: %s" % doc.get("kb_id", "N/A"),
+            "Size: %s bytes" % "{:,}".format(doc.get("size", 0)),
+            "Type: %s" % doc.get("type", "unknown"),
             "",
             "--- Document Content ---",
             "",
             "Section 1: Overview",
-            f"This document titled '{title}' contains important information",
-            "that has been processed and indexed for AI-powered retrieval.",
+            "This document has been processed and indexed",
+            "for AI-powered retrieval and question answering.",
             "",
             "Section 2: Key Information",
-            "The content has been parsed into chunks for efficient search",
-            "and question-answering capabilities.",
-            f"Total chunks generated: {doc.get('chunk_num', 0)}",
-            f"Total tokens processed: {doc.get('token_num', 0)}",
+            "The content has been parsed into %d chunks" % doc.get("chunk_num", 0),
+            "for efficient search and retrieval.",
+            "Total tokens processed: %d" % doc.get("token_num", 0),
             "",
             "Section 3: Product Details" if "Product" in title else "Section 3: Policy Details",
-            "Emami Limited is a leading FMCG company with a diverse portfolio",
-            "of personal care and healthcare products including BoroPlus,",
-            "Navratna Oil, Fair and Handsome, Zandu Balm, and Kesh King.",
+            "Emami Limited is a leading FMCG company with",
+            "a diverse portfolio of personal care products",
+            "including BoroPlus, Navratna Oil, Fair and Handsome,",
+            "Zandu Balm, and Kesh King.",
             "",
             "Section 4: Quality Standards",
-            "All products undergo rigorous quality testing and comply with",
-            "international safety and regulatory standards.",
+            "All products undergo rigorous quality testing",
+            "and comply with international safety standards.",
             "",
             "Section 5: Distribution Network",
-            "Products are distributed through 600,000+ retail outlets across",
-            "India and exported to over 60 countries worldwide.",
+            "Products are distributed through 600,000+ retail",
+            "outlets across India and exported to 60+ countries.",
             "",
             "--- End of Document ---",
         ]
@@ -1088,55 +1114,34 @@ def document_thumbnails():
 
 @app.route("/v1/document/get/<doc_id>", methods=["GET"])
 def document_get(doc_id):
-    """Serve actual document content for the PDF/document viewer.
+    """Serve document content for the PDF viewer (pdf.js / react-pdf-highlighter).
 
-    The frontend passes this URL directly to pdf.js (for PDFs) or
-    window.open (for other file types).  It expects BINARY file content,
-    NOT a JSON envelope.
+    Two consumers hit this URL:
+    1. useCatchDocumentError (axios pre-check) — expects JSON {code:0} on success
+    2. PdfLoader (pdf.js) — expects raw PDF binary with Content-Type: application/pdf
+
+    We differentiate by Accept header:
+    - axios default: "application/json, text/plain, */*"  → starts with application/json
+    - pdf.js fetch: generic or no specific Accept → serve binary PDF
     """
     doc = _find_doc(doc_id)
     if not doc:
-        return Response(b"Document not found", status=404, content_type="text/plain")
+        # Return JSON error so useCatchDocumentError can display it
+        return jsonify({"code": 102, "data": None, "message": "Document not found"}), 404
 
-    doc_type = doc.get("type", "pdf")
+    accept = request.headers.get("Accept", "")
 
-    if doc_type == "pdf":
-        pdf_bytes = _get_mock_pdf_for_doc(doc)
-        return send_file(
-            io.BytesIO(pdf_bytes),
-            mimetype="application/pdf",
-            as_attachment=False,
-            download_name=doc.get("name", "document.pdf"),
-        )
-    else:
-        # For non-PDF files, return an HTML preview page
-        title = doc.get("name", "Document")
-        html = f"""<!DOCTYPE html>
-<html><head><title>{title}</title>
-<style>
-body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }}
-h1 {{ color: #1F3864; border-bottom: 2px solid #0078D4; padding-bottom: 10px; }}
-.meta {{ color: #666; margin-bottom: 20px; }}
-.content {{ line-height: 1.8; }}
-</style></head>
-<body>
-<h1>{title}</h1>
-<div class="meta">
-  <p>Type: {doc_type.upper()} | Size: {doc.get('size', 0):,} bytes | Chunks: {doc.get('chunk_num', 0)}</p>
-</div>
-<div class="content">
-<h2>Document Preview</h2>
-<p>This is a mock preview of <strong>{title}</strong>. In a production environment,
-the actual document content would be displayed here.</p>
-<h3>Key Information</h3>
-<p>This document has been processed and indexed by the RAGFlow system.
-It contains {doc.get('chunk_num', 0)} chunks and {doc.get('token_num', 0)} tokens.</p>
-<h3>Sample Content</h3>
-<p>Emami Limited products include BoroPlus, Navratna Oil, Fair and Handsome,
-Zandu Balm, and Kesh King — all meeting international quality standards.</p>
-</div>
-</body></html>"""
-        return Response(html, content_type="text/html; charset=utf-8")
+    # If the client explicitly wants JSON (axios pre-check), return JSON success
+    if accept.startswith("application/json"):
+        return ok({"id": doc["id"], "name": doc["name"], "type": doc.get("type", "pdf")})
+
+    # Otherwise serve binary PDF content for pdf.js
+    pdf_bytes = _get_mock_pdf_for_doc(doc)
+    resp = Response(pdf_bytes, mimetype="application/pdf")
+    resp.headers["Content-Length"] = str(len(pdf_bytes))
+    resp.headers["Content-Disposition"] = "inline; filename=\"%s\"" % doc.get("name", "document.pdf")
+    resp.headers["Accept-Ranges"] = "bytes"
+    return resp
 
 
 @app.route("/v1/document/download/<doc_id>", methods=["GET"])
