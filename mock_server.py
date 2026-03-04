@@ -551,6 +551,11 @@ MOCK_KB_DOCS = {
     ],
 }   # { kb_id: [ {doc}, ... ] }
 
+# In-memory store for ACTUAL uploaded file bytes (doc_id → bytes)
+# When a user uploads a real file, we store its content here so
+# /v1/document/get/<doc_id> can serve the REAL file back.
+MOCK_FILE_STORE = {}
+
 
 def _make_default_kb(kb_id):
     """Return a fallback KB object so detail pages never crash."""
@@ -935,10 +940,12 @@ def document_upload():
             "created_by": MOCK_USER["nickname"],
             "thumbnail": None,
         }
+        # Store the actual file bytes so we can serve them back later
+        file_bytes = f.read()
+        doc["size"] = len(file_bytes)
+        MOCK_FILE_STORE[doc_id] = file_bytes
         MOCK_KB_DOCS[kb_id].append(doc)
         uploaded.append(doc)
-        # Discard actual file content (mock server)
-        f.read()
     # Update KB doc count + chunk count
     kb = _find_kb(kb_id)
     if kb:
@@ -1135,10 +1142,31 @@ def document_get(doc_id):
     if accept.startswith("application/json"):
         return ok({"id": doc["id"], "name": doc["name"], "type": doc.get("type", "pdf")})
 
-    # Otherwise serve binary PDF content for pdf.js
-    pdf_bytes = _get_mock_pdf_for_doc(doc)
-    resp = Response(pdf_bytes, mimetype="application/pdf")
-    resp.headers["Content-Length"] = str(len(pdf_bytes))
+    # Serve the REAL uploaded file if we have it stored, otherwise generate mock PDF
+    real_bytes = MOCK_FILE_STORE.get(doc_id)
+    if real_bytes:
+        # Serve the actual uploaded file with correct MIME type
+        doc_type = doc.get("type", "pdf")
+        mime_map = {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "doc": "application/msword",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "txt": "text/plain",
+            "csv": "text/csv",
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+        }
+        mimetype = mime_map.get(doc_type, "application/octet-stream")
+        resp = Response(real_bytes, mimetype=mimetype)
+    else:
+        # No real file stored — generate a mock PDF as fallback
+        pdf_bytes = _get_mock_pdf_for_doc(doc)
+        resp = Response(pdf_bytes, mimetype="application/pdf")
+
+    resp.headers["Content-Length"] = str(len(resp.get_data()))
     resp.headers["Content-Disposition"] = "inline; filename=\"%s\"" % doc.get("name", "document.pdf")
     resp.headers["Accept-Ranges"] = "bytes"
     return resp
@@ -1151,23 +1179,28 @@ def document_download(doc_id):
     if not doc:
         return Response(b"Document not found", status=404, content_type="text/plain")
 
-    doc_type = doc.get("type", "pdf")
-    if doc_type == "pdf":
+    # Serve real file if stored, otherwise fallback to mock
+    real_bytes = MOCK_FILE_STORE.get(doc_id)
+    if real_bytes:
+        doc_type = doc.get("type", "pdf")
+        mime_map = {
+            "pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "doc": "application/msword", "txt": "text/plain", "csv": "text/csv",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+        return send_file(
+            io.BytesIO(real_bytes),
+            mimetype=mime_map.get(doc_type, "application/octet-stream"),
+            as_attachment=True,
+            download_name=doc.get("name", "document"),
+        )
+    else:
         pdf_bytes = _get_mock_pdf_for_doc(doc)
         return send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
             as_attachment=True,
             download_name=doc.get("name", "document.pdf"),
-        )
-    else:
-        # Non-PDF: serve a simple text representation
-        content = f"Mock content for {doc.get('name', 'document')}\n"
-        return send_file(
-            io.BytesIO(content.encode("utf-8")),
-            mimetype="application/octet-stream",
-            as_attachment=True,
-            download_name=doc.get("name", "document.txt"),
         )
 
 
