@@ -410,63 +410,20 @@ const routeConfigOptions = [
   },
 
   // ══════════════════════════════════════════════════════════
-  // Admin Console (own layout with separate auth)
+  // Admin Console — Redirect /admin to new login page
+  // The old separate admin console is disabled.
+  // All admin features now live inside the main app sidebar.
   // ══════════════════════════════════════════════════════════
   {
-    path: Routes.Admin,
-    Component: () => import('@/pages/admin/layouts/root-layout'),
-    children: [
-      {
-        path: Routes.Admin,
-        Component: () => import('@/pages/admin/login'),
-      },
-      {
-        path: Routes.Admin,
-        Component: () => import('@/pages/admin/layouts/authorized-layout'),
-
-        children: [
-          {
-            path: `${Routes.AdminUserManagement}/:id`,
-            Component: () => import('@/pages/admin/user-detail'),
-          },
-          {
-            Component: () => import('@/pages/admin/layouts/navigation-layout'),
-
-            children: [
-              {
-                path: Routes.AdminServices,
-                Component: () => import('@/pages/admin/service-status'),
-              },
-              {
-                path: Routes.AdminUserManagement,
-                Component: () => import('@/pages/admin/users'),
-              },
-              {
-                path: Routes.AdminSandboxSettings,
-                Component: () => import('@/pages/admin/sandbox-settings'),
-              },
-              ...(IS_ENTERPRISE
-                ? [
-                    {
-                      path: Routes.AdminWhitelist,
-                      Component: () => import('@/pages/admin/whitelist'),
-                    },
-                    {
-                      path: Routes.AdminRoles,
-                      Component: () => import('@/pages/admin/roles'),
-                    },
-                    {
-                      path: Routes.AdminMonitoring,
-                      Component: () => import('@/pages/admin/monitoring'),
-                    },
-                  ]
-                : []),
-            ],
-          },
-        ],
-      },
-    ],
-  } satisfies LazyRouteConfig,
+    path: '/admin',
+    element: <Navigate to="/login-next" replace />,
+    layout: false,
+  },
+  {
+    path: '/admin/*',
+    element: <Navigate to="/login-next" replace />,
+    layout: false,
+  },
 
   // ══════════════════════════════════════════════════════════
   // 404 Catch-all

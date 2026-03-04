@@ -1,20 +1,26 @@
 /**
  * AppLayout — Main application layout with sidebar + header + content.
  *
- * Replaces the old header-tabs layout with:
+ * Auth guard: If user is not logged in, redirects to /login-next.
+ * After login, shows:
  * - Fixed dark blue sidebar (260px) on the left
  * - White header (60px) at the top of content area
  * - Scrollable content area below header
- *
- * This layout wraps all authenticated pages.
  */
 
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { Outlet } from 'react-router';
+import authorizationUtil from '@/utils/authorization-util';
+import { Navigate, Outlet } from 'react-router';
 import { AppHeader } from './components/app-header';
 import { AppSidebar } from './components/app-sidebar';
 
 export default function AppLayout() {
+  // Auth guard — redirect to login if no token
+  const auth = authorizationUtil.getAuthorization();
+  if (!auth) {
+    return <Navigate to="/login-next" replace />;
+  }
+
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex h-screen w-full bg-[#F4F6F9]">
