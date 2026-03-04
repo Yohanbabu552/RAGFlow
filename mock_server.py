@@ -698,22 +698,26 @@ def document_upload():
             "process_begin_at": None,
             "process_duration": 0,
             "status": "1",
-            "chunk_num": 0, "token_num": 0,
+            "chunk_num": 42, "token_num": 3200,
             "create_time": ts, "update_time": ts,
             "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
             "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
             "created_by": MOCK_USER["nickname"],
             "thumbnail": None,
+            "run": "1", "progress": 1.0, "progress_msg": "Done (mock)",
         }
         MOCK_KB_DOCS[kb_id].append(doc)
         uploaded.append(doc)
         # Discard actual file content (mock server)
         f.read()
-    # Update KB doc count
+    # Update KB doc count + chunk count
     kb = _find_kb(kb_id)
     if kb:
-        kb["document_count"] = len(MOCK_KB_DOCS.get(kb_id, []))
+        all_docs = MOCK_KB_DOCS.get(kb_id, [])
+        kb["document_count"] = len(all_docs)
         kb["doc_num"] = kb["document_count"]
+        kb["chunk_num"] = sum(d.get("chunk_num", 0) for d in all_docs)
+        kb["token_num"] = sum(d.get("token_num", 0) for d in all_docs)
     return ok(uploaded)
 
 
@@ -745,10 +749,12 @@ def document_run():
     data = request.get_json(silent=True) or {}
     doc_ids = data.get("doc_ids", [])
     run_flag = data.get("run", 1)
+    affected_kbs = set()
     # Mark docs as processing/parsed
-    for docs in MOCK_KB_DOCS.values():
+    for kb_id, docs in MOCK_KB_DOCS.items():
         for doc in docs:
             if doc["id"] in doc_ids or doc.get("doc_id") in doc_ids:
+                affected_kbs.add(kb_id)
                 if run_flag:
                     doc["run"] = "1"
                     doc["progress"] = 1.0
@@ -758,6 +764,15 @@ def document_run():
                 else:
                     doc["run"] = "0"
                     doc["progress"] = 0.0
+                    doc["chunk_num"] = 0
+                    doc["token_num"] = 0
+    # Update parent KB chunk counts
+    for kb_id in affected_kbs:
+        kb = _find_kb(kb_id)
+        if kb:
+            all_docs = MOCK_KB_DOCS.get(kb_id, [])
+            kb["chunk_num"] = sum(d.get("chunk_num", 0) for d in all_docs)
+            kb["token_num"] = sum(d.get("token_num", 0) for d in all_docs)
     return ok(True)
 
 
@@ -773,14 +788,22 @@ def document_create():
         "location": data.get("name", "Untitled.txt"),
         "size": 0, "type": "txt", "suffix": ".txt",
         "source_type": "local", "parser_id": "naive", "parser_config": {},
-        "run": "0", "progress": 0.0, "progress_msg": "", "status": "1",
-        "chunk_num": 0, "token_num": 0,
+        "run": "1", "progress": 1.0, "progress_msg": "Done (mock)", "status": "1",
+        "chunk_num": 42, "token_num": 3200,
         "create_time": ts, "update_time": ts,
         "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "created_by": MOCK_USER["nickname"], "thumbnail": None,
     }
     MOCK_KB_DOCS.setdefault(kb_id, []).append(doc)
+    # Update parent KB chunk counts
+    kb = _find_kb(kb_id)
+    if kb:
+        all_docs = MOCK_KB_DOCS.get(kb_id, [])
+        kb["document_count"] = len(all_docs)
+        kb["doc_num"] = kb["document_count"]
+        kb["chunk_num"] = sum(d.get("chunk_num", 0) for d in all_docs)
+        kb["token_num"] = sum(d.get("token_num", 0) for d in all_docs)
     return ok(doc)
 
 
