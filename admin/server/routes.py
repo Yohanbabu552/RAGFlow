@@ -31,8 +31,7 @@ from roles import RoleMgr
 from api.common.exceptions import AdminException
 from common.versions import get_ragflow_version
 from api.utils.api_utils import generate_confirmation_token
-from api.db.db_models import User, Knowledgebase, Document, Project, UserProject
-from api.db import DB
+from api.db.db_models import DB, User, Knowledgebase, Document, Project, UserProject
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/v1/admin")
 
