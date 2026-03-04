@@ -265,6 +265,21 @@ export default {
   listDataflow: `${api_host}/dataflow/list`,
   runDataflow: `${api_host}/dataflow/run`,
 
+  // project (RBAC)
+  project_create: `${api_host}/project/create`,
+  project_list: `${api_host}/project/list`,
+  project_detail: `${api_host}/project/detail`,
+  project_update: `${api_host}/project/update`,
+  project_rm: `${api_host}/project/rm`,
+  project_users: (projectId: string) =>
+    `${api_host}/project/${projectId}/users`,
+  project_assign_user: (projectId: string) =>
+    `${api_host}/project/${projectId}/user`,
+  project_remove_user: (projectId: string, userId: string) =>
+    `${api_host}/project/${projectId}/user/${userId}`,
+  project_update_user_role: (projectId: string, userId: string) =>
+    `${api_host}/project/${projectId}/user/${userId}/role`,
+
   // admin
   adminLogin: `${ExternalApi}${api_host}/admin/login`,
   adminLogout: `${ExternalApi}${api_host}/admin/logout`,

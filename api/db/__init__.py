@@ -30,6 +30,11 @@ class TenantPermission(StrEnum):
     TEAM = 'team'
 
 
+class ProjectRole(StrEnum):
+    ADMIN = 'admin'    # Project Admin - can manage users, docs, folders within project
+    MEMBER = 'member'  # Standard User - can view, upload, chat within project
+
+
 class SerializedType(IntEnum):
     PICKLE = 1
     JSON = 2

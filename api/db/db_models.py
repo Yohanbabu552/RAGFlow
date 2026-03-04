@@ -746,6 +746,30 @@ class UserTenant(DataBaseModel):
         db_table = "user_tenant"
 
 
+class Project(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    tenant_id = CharField(max_length=32, null=False, help_text="tenant id", index=True)
+    name = CharField(max_length=128, null=False, help_text="project name", index=True)
+    description = TextField(null=True, help_text="project description")
+    created_by = CharField(max_length=32, null=False, help_text="who created it", index=True)
+    status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
+
+    class Meta:
+        db_table = "project"
+
+
+class UserProject(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    user_id = CharField(max_length=32, null=False, help_text="user id", index=True)
+    project_id = CharField(max_length=32, null=False, help_text="project id", index=True)
+    role = CharField(max_length=32, null=False, help_text="ProjectRole: admin or member", index=True)
+    assigned_by = CharField(max_length=32, null=False, help_text="who assigned this role", index=True)
+    status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
+
+    class Meta:
+        db_table = "user_project"
+
+
 class InvitationCode(DataBaseModel):
     id = CharField(max_length=32, primary_key=True)
     code = CharField(max_length=32, null=False, index=True)
@@ -831,6 +855,7 @@ class Knowledgebase(DataBaseModel):
     language = CharField(max_length=32, null=True, default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English", help_text="English|Chinese", index=True)
     description = TextField(null=True, help_text="KB description")
     embd_id = CharField(max_length=128, null=False, help_text="default embedding model ID", index=True)
+    project_id = CharField(max_length=32, null=True, help_text="project id for RBAC", index=True)
     permission = CharField(max_length=16, null=False, help_text="me|team", default="me", index=True)
     created_by = CharField(max_length=32, null=False, index=True)
     doc_num = IntegerField(default=0, index=True)
@@ -1382,4 +1407,6 @@ def migrate_db():
     alter_db_add_column(migrator, "api_4_conversation", "exp_user_id", CharField(max_length=255, null=True, help_text="exp_user_id", index=True))
     # Migrate system_settings.value from CharField to TextField for longer sandbox configs
     alter_db_column_type(migrator, "system_settings", "value", TextField(null=False, help_text="Configuration value (JSON, string, etc.)"))
+    # RBAC: Add project_id to knowledgebase for project-level access control
+    alter_db_add_column(migrator, "knowledgebase", "project_id", CharField(max_length=32, null=True, help_text="project id for RBAC", index=True))
     logging.disable(logging.NOTSET)

@@ -601,7 +601,14 @@ async def user_profile():
               type: string
               description: User email.
     """
-    return get_json_result(data=current_user.to_dict())
+    user_data = current_user.to_dict()
+    # RBAC: Include project roles in user info response
+    try:
+        from api.db.services.project_service import UserProjectService
+        user_data["project_roles"] = UserProjectService.get_user_project_roles(current_user.id)
+    except Exception:
+        user_data["project_roles"] = []
+    return get_json_result(data=user_data)
 
 
 def rollback_user_registration(user_id):

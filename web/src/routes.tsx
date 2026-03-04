@@ -72,6 +72,8 @@ export enum Routes {
   AdminWhitelist = `${Admin}/whitelist`,
   AdminRoles = `${Admin}/roles`,
   AdminMonitoring = `${Admin}/monitoring`,
+  Projects = '/projects',
+  ProjectDetail = '/project',
 }
 
 const defaultRouteFallback = (
@@ -278,6 +280,22 @@ const routeConfigOptions = [
     Component: () => import('@/pages/agents/agent-templates'),
   },
 
+  {
+    path: Routes.Projects,
+    layout: false,
+    Component: () => import('@/layouts/next'),
+    children: [
+      {
+        path: Routes.Projects,
+        Component: () => import('@/pages/projects'),
+      },
+    ],
+  },
+  {
+    path: `${Routes.ProjectDetail}/:id`,
+    layout: false,
+    Component: () => import('@/pages/projects/project-detail'),
+  },
   {
     path: Routes.Files,
     layout: false,

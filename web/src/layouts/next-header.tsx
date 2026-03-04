@@ -21,6 +21,7 @@ import {
   CircleHelp,
   Cpu,
   File,
+  FolderKanban,
   House,
   Library,
   MessageSquareText,
@@ -43,6 +44,7 @@ const PathMap = {
   [Routes.Searches]: [Routes.Searches],
   [Routes.Agents]: [Routes.Agents],
   [Routes.Memories]: [Routes.Memories, Routes.Memory, Routes.MemoryMessage],
+  [Routes.Projects]: [Routes.Projects, Routes.ProjectDetail],
   [Routes.Files]: [Routes.Files],
 } as const;
 
@@ -80,6 +82,7 @@ export function Header() {
       { path: Routes.Searches, name: t('header.search'), icon: Search },
       { path: Routes.Agents, name: t('header.flow'), icon: Cpu },
       { path: Routes.Memories, name: t('header.memories'), icon: Cpu },
+      { path: Routes.Projects, name: 'Projects', icon: FolderKanban },
       { path: Routes.Files, name: t('header.fileManager'), icon: File },
     ],
     [t],
