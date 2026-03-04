@@ -221,7 +221,7 @@ const Login = () => {
                         <Input
                           placeholder="you@emami.com"
                           autoComplete="email"
-                          className="h-11 rounded-lg border-[#E2E8F0] px-4 text-sm focus:border-[#0078D4] focus:ring-[#0078D4]/20"
+                          className="h-11 rounded-lg border-[#E2E8F0] bg-white px-4 text-sm text-[#1A202C] placeholder:text-[#94A3B8] focus:border-[#0078D4] focus:ring-[#0078D4]/20"
                           {...field}
                         />
                       </FormControl>
@@ -244,7 +244,7 @@ const Login = () => {
                           <Input
                             placeholder={t('nicknamePlaceholder')}
                             autoComplete="username"
-                            className="h-11 rounded-lg border-[#E2E8F0] px-4 text-sm focus:border-[#0078D4] focus:ring-[#0078D4]/20"
+                            className="h-11 rounded-lg border-[#E2E8F0] bg-white px-4 text-sm text-[#1A202C] placeholder:text-[#94A3B8] focus:border-[#0078D4] focus:ring-[#0078D4]/20"
                             {...field}
                           />
                         </FormControl>
@@ -273,7 +273,7 @@ const Login = () => {
                                 ? 'current-password'
                                 : 'new-password'
                             }
-                            className="h-11 rounded-lg border-[#E2E8F0] px-4 pr-11 text-sm focus:border-[#0078D4] focus:ring-[#0078D4]/20"
+                            className="h-11 rounded-lg border-[#E2E8F0] bg-white px-4 pr-11 text-sm text-[#1A202C] placeholder:text-[#94A3B8] focus:border-[#0078D4] focus:ring-[#0078D4]/20"
                             {...field}
                           />
                           <button
