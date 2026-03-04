@@ -54,6 +54,7 @@ MOCK_USER = {
     "update_date": "2025-01-01 00:00:00",
     "last_login_time": "2025-01-01 00:00:00",
     "access_token": "mock-token-001",
+    "password": "********",
     "project_roles": [],
 }
 
@@ -1959,7 +1960,9 @@ def system_config():
 
 @app.route("/v1/system/version", methods=["GET"])
 def system_version():
-    return ok({"version": "0.24.0-rbac-demo"})
+    # Frontend does setVersion(data.data) and renders {version} inline.
+    # Must be a plain string, NOT an object — React can't render objects as children.
+    return ok("0.24.0-rbac-demo")
 
 
 @app.route("/v1/system/status", methods=["GET"])

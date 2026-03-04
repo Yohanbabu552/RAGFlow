@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRouteError } from 'react-router';
 
 interface FallbackComponentProps {
   error?: Error;
@@ -7,10 +8,28 @@ interface FallbackComponentProps {
 }
 
 const FallbackComponent: React.FC<FallbackComponentProps> = ({
-  error,
+  error: errorProp,
   reset,
 }) => {
   const { t } = useTranslation();
+
+  // React Router passes errors via useRouteError, not props
+  let routeError: unknown;
+  try {
+    routeError = useRouteError();
+  } catch {
+    // Not inside a React Router error boundary — ignore
+  }
+
+  const error = errorProp ?? (routeError as Error | undefined);
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : error
+          ? JSON.stringify(error)
+          : undefined;
 
   return (
     <div style={{ padding: '20px', textAlign: 'center' }}>
@@ -21,10 +40,10 @@ const FallbackComponent: React.FC<FallbackComponentProps> = ({
           'Sorry, an error occurred while loading the page.',
         )}
       </p>
-      {error && (
+      {errorMessage && (
         <details style={{ whiteSpace: 'pre-wrap', marginTop: '16px' }}>
           <summary>{t('error_boundary.details', 'Error details')}</summary>
-          {error.toString()}
+          {errorMessage}
         </details>
       )}
       <div style={{ marginTop: '16px' }}>
