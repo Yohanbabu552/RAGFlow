@@ -108,15 +108,30 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  /** Check if user can see a nav item */
+  // Read the role selected at login time
+  const selectedRole = (typeof window !== 'undefined'
+    ? localStorage.getItem('selectedRole')
+    : null) as 'super_admin' | 'project_admin' | 'user' | null;
+
+  /** Check if user can see a nav item based on BOTH server role AND selected role at login */
   const canSee = useCallback(
     (item: NavItem) => {
-      if (!item.roles) return true;
-      if (isAdmin) return true;
+      if (!item.roles) return true; // Visible to all
+
+      // Use selectedRole from login to determine visibility
+      // This ensures Super Admin login sees admin items,
+      // while User/Project Admin login hides admin items
+      if (selectedRole === 'super_admin' && isAdmin) return true;
+      if (selectedRole === 'project_admin') {
+        return item.roles.includes('project_admin');
+      }
+
+      // Fallback: use server-side effective role
+      if (isAdmin && !selectedRole) return true;
       if (!effectiveRole) return false;
       return item.roles.includes(effectiveRole);
     },
-    [isAdmin, effectiveRole],
+    [isAdmin, effectiveRole, selectedRole],
   );
 
   /** Check if a nav item is active */
@@ -132,6 +147,7 @@ export function AppSidebar() {
   const visibleAdminItems = adminNavItems.filter(canSee);
 
   const handleLogout = useCallback(() => {
+    localStorage.removeItem('selectedRole');
     navigate(Routes.Login);
   }, [navigate]);
 
@@ -158,6 +174,26 @@ export function AppSidebar() {
             </span>
           </div>
         </div>
+        {/* Role badge */}
+        {selectedRole && (
+          <div className="mt-3 group-data-[collapsible=icon]:hidden">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold ${
+                selectedRole === 'super_admin'
+                  ? 'bg-[#F59E0B]/20 text-[#FCD34D]'
+                  : selectedRole === 'project_admin'
+                    ? 'bg-[#0078D4]/20 text-[#60A5FA]'
+                    : 'bg-white/10 text-white/70'
+              }`}
+            >
+              {selectedRole === 'super_admin'
+                ? '\u{1F6E1}\uFE0F Super Admin'
+                : selectedRole === 'project_admin'
+                  ? '\u{1F527} Project Admin'
+                  : '\u{1F464} Standard User'}
+            </span>
+          </div>
+        )}
       </SidebarHeader>
 
       {/* ── Navigation ──────────────────────────── */}
