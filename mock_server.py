@@ -58,9 +58,13 @@ MOCK_USER = {
 MOCK_TENANT = {
     "tenant_id": "tenant-001",
     "name": "Emami",
-    "llm_id": "", "embd_id": "", "asr_id": "",
-    "img2txt_id": "", "rerank_id": "", "tts_id": "",
-    "parser_ids": "", "role": "owner",
+    "llm_id": "qwen2.5:latest@Ollama",
+    "embd_id": "BAAI/bge-large-en-v1.5@Ollama",
+    "asr_id": "",
+    "img2txt_id": "minicpm-v:latest@Ollama",
+    "rerank_id": "", "tts_id": "",
+    "parser_ids": "naive:General,qa:Q&A,table:Table,resume:Resume,manual:Manual,paper:Paper,book:Book,laws:Laws,presentation:Presentation,one:One,knowledge_graph:Knowledge Graph",
+    "role": "owner",
 }
 
 # ── Projects ──────────────────────────────────────────────────
@@ -452,34 +456,113 @@ def admin_audit_events():
 # ══════════════════════════════════════════════════════════════
 # Stub endpoints (keep frontend from crashing)
 # ══════════════════════════════════════════════════════════════
+# ── Knowledge Base / Dataset endpoints ────────────────────────
+MOCK_KBS = []
+
 @app.route("/v1/kb/list", methods=["GET", "POST"])
 def kb_list():
-    return ok({"kbs": [], "total": 0})
+    return ok({"kbs": MOCK_KBS, "total": len(MOCK_KBS)})
 
 
+@app.route("/v1/kb/create", methods=["POST"])
+def kb_create():
+    """Create a new knowledge base."""
+    data = request.get_json(silent=True) or {}
+    kb_id = str(uuid.uuid4())[:12]
+    ts = int(time.time())
+    kb = {
+        "kb_id": kb_id,
+        "id": kb_id,
+        "name": data.get("name", "Untitled"),
+        "description": "",
+        "tenant_id": "tenant-001",
+        "embd_id": data.get("embd_id", "BAAI/bge-large-en-v1.5@Ollama"),
+        "parser_id": data.get("parser_id", "naive"),
+        "parser_config": {},
+        "permission": "me",
+        "language": "English",
+        "chunk_num": 0,
+        "document_count": 0,
+        "token_num": 0,
+        "status": "1",
+        "create_time": ts,
+        "update_time": ts,
+    }
+    MOCK_KBS.append(kb)
+    return ok(kb)
+
+
+@app.route("/v1/kb/<kb_id>", methods=["GET"])
+def kb_detail(kb_id):
+    """Get knowledge base details."""
+    for kb in MOCK_KBS:
+        if kb.get("kb_id") == kb_id or kb.get("id") == kb_id:
+            return ok(kb)
+    # Return a default if not found (so the detail page doesn't crash)
+    return ok({
+        "kb_id": kb_id, "id": kb_id, "name": "Knowledge Base",
+        "description": "", "tenant_id": "tenant-001",
+        "embd_id": "BAAI/bge-large-en-v1.5@Ollama",
+        "parser_id": "naive", "parser_config": {},
+        "permission": "me", "language": "English",
+        "chunk_num": 0, "document_count": 0, "token_num": 0,
+        "status": "1", "create_time": int(time.time()), "update_time": int(time.time()),
+    })
+
+
+@app.route("/v1/kb/update", methods=["POST", "PUT"])
+def kb_update():
+    return ok(True)
+
+
+@app.route("/v1/kb/rm", methods=["DELETE", "POST"])
+def kb_rm():
+    return ok(True)
+
+
+# ── Dialog / Chat endpoints ───────────────────────────────────
 @app.route("/v1/dialog/list", methods=["GET"])
 def dialog_list():
     return ok([])
 
 
-@app.route("/v1/dialog/next", methods=["GET"])
+@app.route("/v1/dialog/next", methods=["GET", "POST"])
 def dialog_next():
     return ok({"dialogs": [], "total": 0})
 
 
+# ── LLM endpoints (proper mock data) ─────────────────────────
+MOCK_LLM_LIST = {
+    "Ollama": [
+        {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "available": True, "fid": "Ollama", "max_tokens": 512},
+        {"llm_name": "qwen2.5:latest", "model_type": "chat", "available": True, "fid": "Ollama", "max_tokens": 8192},
+        {"llm_name": "minicpm-v:latest", "model_type": "image2text", "available": True, "fid": "Ollama", "max_tokens": 4096},
+    ],
+}
+
+MOCK_LLM_FACTORIES = [
+    {"name": "Ollama", "logo": "", "tags": "LLM,TEXT EMBEDDING,IMAGE2TEXT",
+     "status": "1", "llm": [
+         {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "tags": "TEXT EMBEDDING"},
+         {"llm_name": "qwen2.5:latest", "model_type": "chat", "tags": "LLM,CHAT"},
+         {"llm_name": "minicpm-v:latest", "model_type": "image2text", "tags": "IMAGE2TEXT,CHAT"},
+     ]},
+]
+
+
 @app.route("/v1/llm/factories", methods=["GET"])
 def llm_factories():
-    return ok([])
+    return ok(MOCK_LLM_FACTORIES)
 
 
 @app.route("/v1/llm/list", methods=["GET"])
 def llm_list():
-    return ok([])
+    return ok(MOCK_LLM_LIST)
 
 
 @app.route("/v1/llm/my_llms", methods=["GET"])
 def my_llms():
-    return ok({})
+    return ok(MOCK_LLM_LIST)
 
 
 @app.route("/v1/system/config", methods=["GET"])
