@@ -318,3 +318,63 @@ export const testSandboxConnection = (params: {
     provider_type: params.providerType,
     config: params.config,
   });
+
+// ── Admin Stats, Document Stats, Audit Events ──────────────
+export const getAdminStats = () =>
+  request.get<
+    ResponseData<{
+      total_users: number;
+      active_users: number;
+      super_admins: number;
+      deactivated_users: number;
+      total_documents: number;
+      documents_processed: number;
+      documents_processing: number;
+      documents_failed: number;
+      total_projects: number;
+      total_queries: number;
+      storage_used_mb: number;
+      storage_total_mb: number;
+    }>
+  >(api.adminStats);
+
+export const getDocumentStats = () =>
+  request.get<
+    ResponseData<{
+      recent_documents: Array<{
+        id: string;
+        name: string;
+        type: string;
+        category: string;
+        project: string;
+        size: string;
+        status: string;
+        uploaded_by: string;
+        create_time: number;
+        time_ago: string;
+      }>;
+      total: number;
+    }>
+  >(api.adminDocStats);
+
+export const getAuditEvents = (filters?: {
+  event_type?: string;
+  user_email?: string;
+  limit?: number;
+}) =>
+  request.get<
+    ResponseData<{
+      events: Array<{
+        id: string;
+        type: string;
+        user_email: string;
+        user_name: string;
+        details: string;
+        project: string;
+        ip_address: string;
+        timestamp: number;
+        time_ago: string;
+      }>;
+      total: number;
+    }>
+  >(api.adminAuditEvents, { params: filters });

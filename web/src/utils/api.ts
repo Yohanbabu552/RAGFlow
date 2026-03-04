@@ -335,6 +335,11 @@ export default {
 
   adminGetSystemVersion: `${ExternalApi}${api_host}/admin/version`,
 
+  // Admin stats + audit + documents
+  adminStats: `${ExternalApi}${api_host}/admin/stats`,
+  adminDocStats: `${ExternalApi}${api_host}/admin/stats/documents`,
+  adminAuditEvents: `${ExternalApi}${api_host}/admin/audit/events`,
+
   // Sandbox settings
   adminListSandboxProviders: `${ExternalApi}${api_host}/admin/sandbox/providers`,
   adminGetSandboxProviderSchema: (providerId: string) =>

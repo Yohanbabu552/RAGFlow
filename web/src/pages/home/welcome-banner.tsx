@@ -1,16 +1,41 @@
 /**
  * WelcomeBanner — Gradient hero banner with greeting and CTAs.
+ * Connected to:
+ * - /v1/user/info (user name)
+ * - /api/v1/admin/stats (document counts for summary text)
  */
 
 import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
 import { Routes } from '@/routes';
+import { getAdminStats } from '@/services/admin-service';
 import { MessageSquare, Upload } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 export function WelcomeBanner() {
   const { data: userInfo } = useFetchUserInfo();
   const navigate = useNavigate();
   const nickname = userInfo?.nickname || 'User';
+
+  const [docsProcessed, setDocsProcessed] = useState(0);
+  const [docsPending, setDocsPending] = useState(0);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await getAdminStats();
+      const data = res?.data;
+      if (data?.code === 0 && data.data) {
+        setDocsProcessed(data.data.documents_processed || 0);
+        setDocsPending(data.data.documents_processing || 0);
+      }
+    } catch {
+      // Silent fail
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   // Simple time-based greeting
   const hour = new Date().getHours();
@@ -26,7 +51,8 @@ export function WelcomeBanner() {
         {greeting}, {nickname}
       </h2>
       <p className="text-sm text-white/80">
-        You have 12 new documents processed and 3 pending reviews today.
+        You have {docsProcessed} documents processed and {docsPending} pending
+        reviews today.
       </p>
 
       <div className="flex gap-3 mt-4">

@@ -1,7 +1,11 @@
 /**
  * StatCards — 4 summary stat cards for the dashboard.
+ * Connected to:
+ * - /v1/project/list (project count)
+ * - /api/v1/admin/stats (documents, OCR, chat queries)
  */
 
+import { getAdminStats } from '@/services/admin-service';
 import projectService from '@/services/project-service';
 import {
   FolderPlus,
@@ -21,22 +25,35 @@ interface Stat {
 
 export function StatCards() {
   const [projectCount, setProjectCount] = useState(0);
+  const [docsUploaded, setDocsUploaded] = useState(0);
+  const [ocrProcessed, setOcrProcessed] = useState(0);
+  const [chatQueries, setChatQueries] = useState(0);
 
-  const fetchProjectCount = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const res = await projectService.listProjects();
-      const data = res?.data;
-      if (data?.code === 0) {
-        setProjectCount(data.data?.length || 0);
+      // Fetch project count
+      const projRes = await projectService.listProjects();
+      const projData = projRes?.data;
+      if (projData?.code === 0) {
+        setProjectCount(projData.data?.length || 0);
+      }
+
+      // Fetch admin stats for docs, OCR, chat
+      const statsRes = await getAdminStats();
+      const statsData = statsRes?.data;
+      if (statsData?.code === 0 && statsData.data) {
+        setDocsUploaded(statsData.data.total_documents || 0);
+        setOcrProcessed(statsData.data.documents_processed || 0);
+        setChatQueries(statsData.data.total_queries || 0);
       }
     } catch {
-      // Silent fail
+      // Silent fail — interceptors handle errors
     }
   }, []);
 
   useEffect(() => {
-    fetchProjectCount();
-  }, [fetchProjectCount]);
+    fetchData();
+  }, [fetchData]);
 
   const stats: Stat[] = [
     {
@@ -48,21 +65,21 @@ export function StatCards() {
     },
     {
       label: 'Documents Uploaded',
-      value: '1,247',
+      value: String(docsUploaded),
       icon: Upload,
       colorClass: 'text-[#28A745]',
       bgClass: 'bg-[#28A745]/10',
     },
     {
       label: 'OCR Processed',
-      value: '1,198',
+      value: String(ocrProcessed),
       icon: Search,
       colorClass: 'text-[#6F42C1]',
       bgClass: 'bg-[#6F42C1]/10',
     },
     {
       label: 'Chat Queries Today',
-      value: '342',
+      value: String(chatQueries),
       icon: MessageSquare,
       colorClass: 'text-[#F59E0B]',
       bgClass: 'bg-[#F59E0B]/10',

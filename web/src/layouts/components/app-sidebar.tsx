@@ -71,7 +71,7 @@ const mainNavItems: NavItem[] = [
     roles: null,
   },
   {
-    path: Routes.Chats,
+    path: Routes.AIChat,
     label: 'AI Chat',
     icon: MessageSquareText,
     roles: null,

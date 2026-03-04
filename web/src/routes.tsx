@@ -75,7 +75,8 @@ export enum Routes {
   Projects = '/projects',
   ProjectDetail = '/project',
 
-  // ── New RBAC admin routes ──
+  // ── New pages ──
+  AIChat = '/ai-chat',
   AdminUsersPage = '/admin-users',
   AdminDashboardPage = '/admin-dashboard',
   AdminAuditPage = '/admin-audit',
@@ -274,6 +275,12 @@ const routeConfigOptions = [
             Component: () => import('@/pages/memory/memory-setting'),
           },
         ],
+      },
+
+      // ── AI Chat page ──
+      {
+        path: Routes.AIChat,
+        Component: () => import('@/pages/ai-chat'),
       },
 
       // ── RBAC Admin pages (new) ──

@@ -1,56 +1,22 @@
 /**
  * RecentDocuments — Recent documents list with status badges.
+ * Connected to /api/v1/admin/stats/documents (getDocumentStats).
  */
 
 import { Routes } from '@/routes';
-import { ArrowRight } from 'lucide-react';
+import { getDocumentStats } from '@/services/admin-service';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 interface RecentDoc {
+  id: string;
   name: string;
-  type: 'pdf' | 'img' | 'doc' | 'xls';
+  type: string;
   category: string;
-  time: string;
-  status: 'processed' | 'processing' | 'failed';
+  time_ago: string;
+  status: string;
 }
-
-const MOCK_DOCS: RecentDoc[] = [
-  {
-    name: 'Sona_Masoori_Rice_Brochure_2026.pdf',
-    type: 'pdf',
-    category: 'Rice Products',
-    time: '2 hours ago',
-    status: 'processed',
-  },
-  {
-    name: 'Fair_And_Handsome_Label_v3.png',
-    type: 'img',
-    category: 'Personal Care',
-    time: '4 hours ago',
-    status: 'processed',
-  },
-  {
-    name: 'Navratna_Oil_Product_Spec.docx',
-    type: 'doc',
-    category: 'Healthcare',
-    time: '5 hours ago',
-    status: 'processing',
-  },
-  {
-    name: 'Q4_Product_Master_Data.xlsx',
-    type: 'xls',
-    category: 'Master Data',
-    time: 'yesterday',
-    status: 'processed',
-  },
-  {
-    name: 'BoroPlus_Cream_Trade_Sheet.pdf',
-    type: 'pdf',
-    category: 'Skincare',
-    time: 'yesterday',
-    status: 'failed',
-  },
-];
 
 const TYPE_STYLES: Record<
   string,
@@ -67,24 +33,50 @@ const STATUS_STYLES: Record<
   { className: string; label: string }
 > = {
   processed: {
-    className:
-      'bg-[#E6F9ED] text-[#28A745] border border-[#A7F3D0]',
-    label: '✓ Processed',
+    className: 'bg-[#E6F9ED] text-[#28A745] border border-[#A7F3D0]',
+    label: '\u2713 Processed',
   },
   processing: {
-    className:
-      'bg-[#FFF8E1] text-[#F59E0B] border border-[#FDE68A]',
-    label: '⟳ Processing',
+    className: 'bg-[#FFF8E1] text-[#F59E0B] border border-[#FDE68A]',
+    label: '\u27F3 Processing',
   },
   failed: {
-    className:
-      'bg-[#FEF2F2] text-[#DC3545] border border-[#FECACA]',
-    label: '✗ Failed',
+    className: 'bg-[#FEF2F2] text-[#DC3545] border border-[#FECACA]',
+    label: '\u2717 Failed',
   },
 };
 
 export function RecentDocuments() {
   const navigate = useNavigate();
+  const [documents, setDocuments] = useState<RecentDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDocuments = useCallback(async () => {
+    try {
+      const res = await getDocumentStats();
+      const data = res?.data;
+      if (data?.code === 0 && data.data?.recent_documents) {
+        setDocuments(
+          data.data.recent_documents.map((d) => ({
+            id: d.id,
+            name: d.name,
+            type: d.type,
+            category: d.category,
+            time_ago: d.time_ago,
+            status: d.status,
+          })),
+        );
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   return (
     <div className="bg-white rounded-xl border border-[#E2E8F0]">
@@ -100,43 +92,55 @@ export function RecentDocuments() {
         </button>
       </div>
 
-      <ul className="px-5 py-2">
-        {MOCK_DOCS.map((doc, i) => {
-          const typeStyle = TYPE_STYLES[doc.type];
-          const statusStyle = STATUS_STYLES[doc.status];
+      {loading ? (
+        <div className="flex items-center justify-center py-10">
+          <Loader2 className="size-5 text-[#0078D4] animate-spin" />
+          <span className="ml-2 text-sm text-[#64748B]">Loading...</span>
+        </div>
+      ) : documents.length === 0 ? (
+        <div className="px-5 py-10 text-center text-sm text-[#64748B]">
+          No documents uploaded yet.
+        </div>
+      ) : (
+        <ul className="px-5 py-2">
+          {documents.map((doc) => {
+            const typeStyle = TYPE_STYLES[doc.type] || TYPE_STYLES.pdf;
+            const statusStyle =
+              STATUS_STYLES[doc.status] || STATUS_STYLES.processed;
 
-          return (
-            <li
-              key={i}
-              className="flex items-center gap-3.5 py-3 border-b border-[#F1F5F9] last:border-0"
-            >
-              {/* File type badge */}
-              <div
-                className={`w-[38px] h-[38px] rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${typeStyle.bg} ${typeStyle.text}`}
+            return (
+              <li
+                key={doc.id}
+                className="flex items-center gap-3.5 py-3 border-b border-[#F1F5F9] last:border-0"
               >
-                {typeStyle.label}
-              </div>
-
-              {/* File info */}
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-[#1A202C] truncate">
-                  {doc.name}
+                {/* File type badge */}
+                <div
+                  className={`w-[38px] h-[38px] rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${typeStyle.bg} ${typeStyle.text}`}
+                >
+                  {typeStyle.label}
                 </div>
-                <div className="text-[11px] text-[#94A3B8] mt-0.5">
-                  {doc.category} &bull; Uploaded {doc.time}
-                </div>
-              </div>
 
-              {/* Status badge */}
-              <span
-                className={`text-[11px] font-medium px-2.5 py-1 rounded-full shrink-0 ${statusStyle.className}`}
-              >
-                {statusStyle.label}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+                {/* File info */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-[#1A202C] truncate">
+                    {doc.name}
+                  </div>
+                  <div className="text-[11px] text-[#94A3B8] mt-0.5">
+                    {doc.category} &bull; Uploaded {doc.time_ago}
+                  </div>
+                </div>
+
+                {/* Status badge */}
+                <span
+                  className={`text-[11px] font-medium px-2.5 py-1 rounded-full shrink-0 ${statusStyle.className}`}
+                >
+                  {statusStyle.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
