@@ -649,14 +649,22 @@ def kb_unbind_task():
 # ══════════════════════════════════════════════════════════════
 # Document endpoints (list, upload, parse, filter, etc.)
 # ══════════════════════════════════════════════════════════════
-@app.route("/v1/document/list", methods=["POST"])
+@app.route("/v1/document/list", methods=["GET", "POST"])
 def document_list():
-    """List documents in a knowledge base — used by useFetchDocumentList."""
-    data = request.get_json(silent=True) or {}
-    kb_id = data.get("kb_id", "")
+    """List documents in a knowledge base — used by useFetchDocumentList.
+    kb_id comes as a QUERY PARAMETER, filters come in the POST body."""
+    # kb_id is always a query param (the frontend sends it via params, not body)
+    kb_id = request.args.get("kb_id", "")
+    page = int(request.args.get("page", 1))
+    page_size = int(request.args.get("page_size", 30))
+    keywords = request.args.get("keywords", "")
+
     docs = MOCK_KB_DOCS.get(kb_id, [])
-    page = data.get("page", 1)
-    page_size = data.get("page_size", 30)
+
+    # Simple keyword search on doc name
+    if keywords:
+        docs = [d for d in docs if keywords.lower() in d.get("name", "").lower()]
+
     start = (page - 1) * page_size
     return ok({"docs": docs[start:start + page_size], "total": len(docs)})
 
@@ -709,11 +717,13 @@ def document_upload():
     return ok(uploaded)
 
 
-@app.route("/v1/document/filter", methods=["POST"])
+@app.route("/v1/document/filter", methods=["GET", "POST"])
 def document_filter():
     """Return available filter options for documents in a KB."""
-    data = request.get_json(silent=True) or {}
-    kb_id = data.get("kb_id", "")
+    kb_id = request.args.get("kb_id", "")
+    if not kb_id:
+        data = request.get_json(silent=True) or {}
+        kb_id = data.get("kb_id", "")
     docs = MOCK_KB_DOCS.get(kb_id, [])
     suffixes = {}
     for d in docs:
