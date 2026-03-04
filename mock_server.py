@@ -914,30 +914,319 @@ def chunk_knowledge_graph():
 
 
 # ══════════════════════════════════════════════════════════════
-# Dialog / Chat endpoints
+# Dialog / Chat endpoints  (full CRUD + conversations)
 # ══════════════════════════════════════════════════════════════
+
+def _make_dialog(dialog_id, name, **overrides):
+    """Build a properly-shaped dialog (chat assistant) object."""
+    ts = int(time.time())
+    d = {
+        "id": dialog_id, "dialog_id": dialog_id,
+        "name": name,
+        "description": overrides.get("description", ""),
+        "icon": overrides.get("icon", ""),
+        "language": "English",
+        "kb_ids": overrides.get("kb_ids", []),
+        "kb_names": overrides.get("kb_names", []),
+        "llm_id": overrides.get("llm_id", MOCK_TENANT["llm_id"]),
+        "llm_setting": {"temperature": 0.1, "max_tokens": 4096, "top_p": 0.3,
+                        "frequency_penalty": 0.7, "presence_penalty": 0.4},
+        "llm_setting_type": "Precise",
+        "prompt_config": {
+            "system": overrides.get("system", "You are a helpful AI assistant. Answer questions using only the provided knowledge base."),
+            "prologue": overrides.get("prologue", "Hi! I'm your AI assistant. Ask me anything about the linked knowledge bases."),
+            "empty_response": overrides.get("empty_response", "Sorry, I couldn't find relevant information. Please try rephrasing."),
+            "quote": True, "keyword": True, "refine_multiturn": True,
+            "use_kg": False, "tts": False, "parameters": [],
+        },
+        "prompt_type": "simple",
+        "top_k": 1024, "top_n": 8,
+        "similarity_threshold": 0.2, "vector_similarity_weight": 0.3,
+        "meta_data_filter": {},
+        "status": "1",
+        "tenant_id": "tenant-001",
+        "create_time": ts, "update_time": ts,
+        "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    d.update({k: v for k, v in overrides.items() if k not in ("system", "prologue", "empty_response")})
+    return d
+
+
+def _make_conversation(conv_id, dialog_id, name="New conversation", messages=None):
+    ts = int(time.time())
+    return {
+        "id": conv_id, "dialog_id": dialog_id,
+        "name": name, "avatar": "",
+        "message": messages or [],
+        "reference": [],
+        "is_new": True,
+        "create_time": ts, "update_time": ts,
+        "create_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "update_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+# In-memory stores
+MOCK_DIALOGS = {}       # { dialog_id: dialog_obj }
+MOCK_CONVERSATIONS = {} # { conv_id: conversation_obj }
+
+
 @app.route("/v1/dialog/list", methods=["GET"])
 def dialog_list():
-    return ok([])
+    return ok(list(MOCK_DIALOGS.values()))
 
 
 @app.route("/v1/dialog/next", methods=["GET", "POST"])
 def dialog_next():
-    return ok({"dialogs": [], "total": 0})
+    """List dialogs with pagination & keyword search."""
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+    else:
+        data = {}
+    keywords = data.get("keywords", request.args.get("keywords", ""))
+    page = int(data.get("page", request.args.get("page", 1)))
+    page_size = int(data.get("page_size", request.args.get("page_size", 30)))
+    dialogs = list(MOCK_DIALOGS.values())
+    if keywords:
+        dialogs = [d for d in dialogs if keywords.lower() in d["name"].lower()]
+    dialogs.sort(key=lambda d: d.get("update_time", 0), reverse=True)
+    start = (page - 1) * page_size
+    return ok({"dialogs": dialogs[start:start + page_size], "total": len(dialogs)})
 
 
-@app.route("/v1/dialog/create", methods=["POST"])
-def dialog_create():
-    return ok({"id": str(uuid.uuid4())[:12]})
+@app.route("/v1/dialog/get", methods=["GET"])
+def dialog_get():
+    """Fetch a single dialog by dialogId query param."""
+    dialog_id = request.args.get("dialogId", request.args.get("dialog_id", ""))
+    d = MOCK_DIALOGS.get(dialog_id)
+    if d:
+        return ok(d)
+    return err("Dialog not found.")
 
 
-@app.route("/v1/dialog/update", methods=["POST", "PUT"])
-def dialog_update():
-    return ok(True)
+@app.route("/v1/dialog/set", methods=["POST"])
+def dialog_set():
+    """Create or update a dialog (chat assistant)."""
+    data = request.get_json(silent=True) or {}
+    dialog_id = data.get("dialog_id", "")
+    if dialog_id and dialog_id in MOCK_DIALOGS:
+        # Update existing
+        d = MOCK_DIALOGS[dialog_id]
+        for key in ("name", "description", "icon", "kb_ids", "kb_names",
+                     "llm_id", "llm_setting", "llm_setting_type",
+                     "prompt_config", "prompt_type",
+                     "top_k", "top_n", "similarity_threshold",
+                     "vector_similarity_weight", "meta_data_filter"):
+            if key in data:
+                d[key] = data[key]
+        d["update_time"] = int(time.time())
+        d["update_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        return ok(d)
+    else:
+        # Create new
+        new_id = data.get("dialog_id") or str(uuid.uuid4())[:12]
+        name = data.get("name", "Untitled Chat")
+        d = _make_dialog(new_id, name, **data)
+        MOCK_DIALOGS[new_id] = d
+        return ok(d)
 
 
 @app.route("/v1/dialog/rm", methods=["DELETE", "POST"])
 def dialog_rm():
+    data = request.get_json(silent=True) or {}
+    dialog_ids = data.get("dialogIds", data.get("dialog_ids", []))
+    if isinstance(dialog_ids, str):
+        dialog_ids = [dialog_ids]
+    for did in dialog_ids:
+        MOCK_DIALOGS.pop(did, None)
+        # Remove conversations for this dialog
+        to_rm = [cid for cid, c in MOCK_CONVERSATIONS.items() if c["dialog_id"] == did]
+        for cid in to_rm:
+            del MOCK_CONVERSATIONS[cid]
+    return ok(True)
+
+
+# ── Conversation (chat session) endpoints ─────────────────────
+@app.route("/v1/conversation/list", methods=["GET"])
+def conversation_list():
+    """List conversations for a dialog."""
+    dialog_id = request.args.get("dialog_id", "")
+    convs = [c for c in MOCK_CONVERSATIONS.values() if c["dialog_id"] == dialog_id]
+    convs.sort(key=lambda c: c.get("update_time", 0), reverse=True)
+    return ok(convs)
+
+
+@app.route("/v1/conversation/get", methods=["GET"])
+def conversation_get():
+    """Get a single conversation with message history."""
+    conv_id = request.args.get("conversationId", request.args.get("conversation_id", ""))
+    c = MOCK_CONVERSATIONS.get(conv_id)
+    if c:
+        return ok(c)
+    return err("Conversation not found.")
+
+
+@app.route("/v1/conversation/set", methods=["POST"])
+def conversation_set():
+    """Create or update a conversation."""
+    data = request.get_json(silent=True) or {}
+    conv_id = data.get("conversation_id", "")
+    if conv_id and conv_id in MOCK_CONVERSATIONS:
+        # Update
+        c = MOCK_CONVERSATIONS[conv_id]
+        if "name" in data:
+            c["name"] = data["name"]
+        if "message" in data:
+            c["message"] = data["message"]
+        c["update_time"] = int(time.time())
+        c["update_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        c["is_new"] = False
+        return ok(c)
+    else:
+        # Create
+        new_id = conv_id or str(uuid.uuid4())[:12]
+        dialog_id = data.get("dialog_id", "")
+        name = data.get("name", "New conversation")
+        c = _make_conversation(new_id, dialog_id, name)
+        MOCK_CONVERSATIONS[new_id] = c
+        return ok(c)
+
+
+@app.route("/v1/conversation/rm", methods=["POST"])
+def conversation_rm():
+    data = request.get_json(silent=True) or {}
+    conv_ids = data.get("conversationIds", data.get("conversation_ids", []))
+    if isinstance(conv_ids, str):
+        conv_ids = [conv_ids]
+    for cid in conv_ids:
+        MOCK_CONVERSATIONS.pop(cid, None)
+    return ok(True)
+
+
+@app.route("/v1/conversation/delete", methods=["DELETE", "POST"])
+def conversation_delete():
+    return conversation_rm()
+
+
+@app.route("/v1/conversation/completion", methods=["POST"])
+def conversation_completion():
+    """Mock streaming chat response (SSE)."""
+    data = request.get_json(silent=True) or {}
+    conv_id = data.get("conversation_id", "")
+    messages = data.get("messages", [])
+
+    # Get the last user message
+    user_msg = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            user_msg = m.get("content", "")
+            break
+
+    # Store user message in conversation
+    if conv_id and conv_id in MOCK_CONVERSATIONS:
+        c = MOCK_CONVERSATIONS[conv_id]
+        c["message"].append({"id": str(uuid.uuid4())[:12], "content": user_msg, "role": "user"})
+
+    # Build a mock AI answer
+    mock_answer = (
+        f"Based on the documents in your knowledge base, here is what I found regarding your query:\n\n"
+        f"**Summary:** The information related to \"{user_msg[:80]}\" indicates that the relevant data "
+        f"has been processed and indexed. The key findings from the uploaded documents suggest "
+        f"comprehensive coverage of this topic.\n\n"
+        f"*Source: Knowledge Base Documents*"
+    )
+
+    msg_id = str(uuid.uuid4())[:12]
+
+    # Store assistant message
+    if conv_id and conv_id in MOCK_CONVERSATIONS:
+        c = MOCK_CONVERSATIONS[conv_id]
+        c["message"].append({"id": msg_id, "content": mock_answer, "role": "assistant"})
+        c["is_new"] = False
+        c["update_time"] = int(time.time())
+        if user_msg:
+            c["name"] = user_msg[:40]
+
+    # Return SSE stream
+    import json as _json
+
+    def generate():
+        # Send message event with the full answer
+        event_data = {
+            "event": "message",
+            "message_id": msg_id,
+            "session_id": conv_id,
+            "created_at": int(time.time()),
+            "task_id": str(uuid.uuid4())[:8],
+            "data": {"content": mock_answer, "audio_binary": "", "outputs": None},
+        }
+        yield f"data: {_json.dumps(event_data)}\n\n"
+
+        # Send message_end event with references
+        end_data = {
+            "event": "message_end",
+            "message_id": msg_id,
+            "session_id": conv_id,
+            "created_at": int(time.time()),
+            "task_id": str(uuid.uuid4())[:8],
+            "data": {
+                "reference": {
+                    "chunks": [
+                        {
+                            "id": "chunk-mock-001",
+                            "content": None,
+                            "document_id": "doc-mock-001",
+                            "document_name": "Knowledge_Base_Document.pdf",
+                            "dataset_id": "kb-mock-001",
+                            "image_id": "",
+                            "similarity": 0.85,
+                            "vector_similarity": 0.82,
+                            "term_similarity": 0.88,
+                            "positions": [],
+                        }
+                    ],
+                    "doc_aggs": [
+                        {"count": 1, "doc_id": "doc-mock-001", "doc_name": "Knowledge_Base_Document.pdf"}
+                    ],
+                    "total": 1,
+                },
+            },
+        }
+        yield f"data: {_json.dumps(end_data)}\n\n"
+
+    from flask import Response
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/v1/conversation/thumbup", methods=["POST"])
+def conversation_thumbup():
+    return ok(True)
+
+
+@app.route("/v1/conversation/tts", methods=["POST"])
+def conversation_tts():
+    return ok({"audio": ""})
+
+
+@app.route("/v1/conversation/ask", methods=["POST"])
+def conversation_ask():
+    return ok({"answer": "This is a mock search answer.", "reference": {"chunks": [], "doc_aggs": [], "total": 0}})
+
+
+@app.route("/v1/conversation/mindmap", methods=["POST"])
+def conversation_mindmap():
+    return ok({"mindmap": ""})
+
+
+@app.route("/v1/conversation/related_questions", methods=["POST"])
+def conversation_related_questions():
+    return ok({"questions": ["What are the key features?", "How does it compare?", "What are the latest updates?"]})
+
+
+@app.route("/v1/conversation/delete_msg", methods=["POST"])
+def conversation_delete_msg():
     return ok(True)
 
 
@@ -1053,21 +1342,6 @@ def system_status():
         "redis": {"status": "green", "elapsed": 0.01, "error": "", "pending": 0},
         "task_executor_heartbeat": {},
     })
-
-
-@app.route("/v1/conversation/list", methods=["GET"])
-def conversation_list():
-    return ok([])
-
-
-@app.route("/v1/conversation/create", methods=["POST"])
-def conversation_create():
-    return ok({"id": str(uuid.uuid4())[:12]})
-
-
-@app.route("/v1/conversation/delete", methods=["DELETE", "POST"])
-def conversation_delete():
-    return ok(True)
 
 
 @app.route("/v1/file/list", methods=["GET"])
