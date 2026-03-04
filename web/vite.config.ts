@@ -65,6 +65,12 @@ export default defineConfig(({ mode, command }) => {
         overlay: false,
       },
       proxy: {
+        // Admin API routes → admin server on port 9381
+        '/api/v1/admin': {
+          target: 'http://127.0.0.1:9381/',
+          changeOrigin: true,
+        },
+        // All other API routes → main API on port 9380
         '/api': {
           target: 'http://127.0.0.1:9380/',
           changeOrigin: true,

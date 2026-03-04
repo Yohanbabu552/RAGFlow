@@ -41,6 +41,9 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./service_conf.yaml.template:/ragflow/conf/service_conf.yaml.template
       - ./entrypoint.sh:/ragflow/entrypoint.sh
+      # Mount custom source code (RBAC, admin, etc.) over the image's bundled code
+      - ../api:/ragflow/api
+      - ../admin:/ragflow/admin
     env_file: .env
     networks:
       - ragflow
