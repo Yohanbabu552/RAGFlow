@@ -73,6 +73,13 @@ export function ActivityFeed() {
   const [loading, setLoading] = useState(true);
 
   const fetchActivities = useCallback(async () => {
+    // Only call admin API for super_admin role — other roles don't have access
+    const role = localStorage.getItem('selectedRole');
+    if (role !== 'super_admin') {
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await getAuditEvents({ limit: 5 });
       const data = res?.data;

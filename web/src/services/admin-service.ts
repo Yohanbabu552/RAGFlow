@@ -1,14 +1,10 @@
-import { history } from '@/utils/simple-history-util';
 import axios from 'axios';
 
 import message from '@/components/ui/message';
 import { Authorization } from '@/constants/authorization';
 import i18n from '@/locales/config';
-import { Routes } from '@/routes';
 import api from '@/utils/api';
-import authorizationUtil, {
-  getAuthorization,
-} from '@/utils/authorization-util';
+import { getAuthorization } from '@/utils/authorization-util';
 import { convertTheKeysOfTheObjectToSnake } from '@/utils/common-util';
 import { ResultCode, RetcodeMessage } from '@/utils/request';
 
@@ -41,13 +37,10 @@ request.interceptors.response.use(
     if (data?.code === 100) {
       message.error(data?.message);
     } else if (data?.code === 401) {
-      message.error(data?.message, {
-        description: data?.message,
-      });
-
-      authorizationUtil.removeAll();
-      history.push(Routes.Admin);
-      window.location.reload();
+      // Admin API returned 401 — user is not a superuser.
+      // Do NOT clear main-app auth or redirect. The calling component
+      // handles this gracefully via try/catch with silent fail.
+      console.warn('[admin-service] 401 — not authorised for admin API');
     } else if (data?.code && data.code !== 0) {
       message.error(`${i18n.t('message.hint')}: ${data?.code}`, {
         description: data?.message,
@@ -67,30 +60,24 @@ request.interceptors.response.use(
       });
     } else if (data?.code === 100) {
       message.error(data?.message);
-    } else if (response.status === 401 || data?.code === 401) {
-      message.error({
-        message: data?.message || response.statusText,
-        description:
-          data?.message || RetcodeMessage[response?.status as ResultCode],
-        duration: 3,
-      });
-
-      authorizationUtil.removeAll();
-      history.push(Routes.Admin);
-      window.location.reload();
+    } else if (response?.status === 401 || data?.code === 401) {
+      // Admin API 401 — user is not a superuser.
+      // Do NOT clear main-app auth. Just let the error propagate
+      // so the calling component's catch block handles it silently.
+      console.warn('[admin-service] 401 — not authorised for admin API');
     } else if (data?.code && data.code !== 0) {
       message.error({
         message: `${i18n.t('message.hint')}: ${data?.code}`,
         description: data?.message,
         duration: 3,
       });
-    } else if (response.status) {
+    } else if (response?.status) {
       message.error({
         message: `${i18n.t('message.requestError')} ${response.status}: ${response.config.url}`,
         description:
           RetcodeMessage[response.status as ResultCode] || response.statusText,
       });
-    } else if (response.status === 413 || response?.status === 504) {
+    } else if (response?.status === 413 || response?.status === 504) {
       message.error(RetcodeMessage[response?.status as ResultCode]);
     }
 

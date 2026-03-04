@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
 import { Routes } from '@/routes';
+import authorizationUtil from '@/utils/authorization-util';
 import { isSuperAdmin, getEffectiveRole } from '@/utils/rbac-util';
 import {
   FileText,
@@ -147,6 +148,8 @@ export function AppSidebar() {
   const visibleAdminItems = adminNavItems.filter(canSee);
 
   const handleLogout = useCallback(() => {
+    // Clear all auth tokens AND selected role, then redirect to login
+    authorizationUtil.removeAll();
     localStorage.removeItem('selectedRole');
     navigate(Routes.Login);
   }, [navigate]);

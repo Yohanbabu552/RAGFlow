@@ -21,6 +21,10 @@ export function WelcomeBanner() {
   const [docsPending, setDocsPending] = useState(0);
 
   const fetchStats = useCallback(async () => {
+    // Only call admin API for super_admin role — other roles don't have access
+    const role = localStorage.getItem('selectedRole');
+    if (role !== 'super_admin') return;
+
     try {
       const res = await getAdminStats();
       const data = res?.data;

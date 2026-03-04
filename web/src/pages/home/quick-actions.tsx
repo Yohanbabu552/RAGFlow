@@ -1,12 +1,21 @@
 /**
  * QuickActions — 2x2 grid of quick action cards.
+ * "Add User" only visible to super_admin role.
  */
 
 import { Routes } from '@/routes';
 import { FolderPlus, MessageSquare, Upload, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
-const actions = [
+interface QuickAction {
+  label: string;
+  icon: typeof Upload;
+  path: string;
+  /** If set, only visible when selectedRole matches */
+  roles?: string[];
+}
+
+const actions: QuickAction[] = [
   {
     label: 'Upload Files',
     icon: Upload,
@@ -26,11 +35,17 @@ const actions = [
     label: 'Add User',
     icon: UserPlus,
     path: Routes.AdminUsersPage,
+    roles: ['super_admin'],
   },
 ];
 
 export function QuickActions() {
   const navigate = useNavigate();
+  const selectedRole = localStorage.getItem('selectedRole') || 'user';
+
+  const visibleActions = actions.filter(
+    (a) => !a.roles || a.roles.includes(selectedRole),
+  );
 
   return (
     <div className="bg-white rounded-xl border border-[#E2E8F0]">
@@ -38,7 +53,7 @@ export function QuickActions() {
         <h3 className="text-sm font-semibold text-[#1A202C]">Quick Actions</h3>
       </div>
       <div className="p-5 grid grid-cols-2 gap-3">
-        {actions.map((action) => {
+        {visibleActions.map((action) => {
           const Icon = action.icon;
           return (
             <button

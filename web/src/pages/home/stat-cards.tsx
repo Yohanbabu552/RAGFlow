@@ -31,23 +31,26 @@ export function StatCards() {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch project count
+      // Fetch project count (available to all roles)
       const projRes = await projectService.listProjects();
       const projData = projRes?.data;
       if (projData?.code === 0) {
         setProjectCount(projData.data?.length || 0);
       }
 
-      // Fetch admin stats for docs, OCR, chat
-      const statsRes = await getAdminStats();
-      const statsData = statsRes?.data;
-      if (statsData?.code === 0 && statsData.data) {
-        setDocsUploaded(statsData.data.total_documents || 0);
-        setOcrProcessed(statsData.data.documents_processed || 0);
-        setChatQueries(statsData.data.total_queries || 0);
+      // Only call admin stats for super_admin role — other roles don't have access
+      const role = localStorage.getItem('selectedRole');
+      if (role === 'super_admin') {
+        const statsRes = await getAdminStats();
+        const statsData = statsRes?.data;
+        if (statsData?.code === 0 && statsData.data) {
+          setDocsUploaded(statsData.data.total_documents || 0);
+          setOcrProcessed(statsData.data.documents_processed || 0);
+          setChatQueries(statsData.data.total_queries || 0);
+        }
       }
     } catch {
-      // Silent fail — interceptors handle errors
+      // Silent fail
     }
   }, []);
 
