@@ -1839,22 +1839,468 @@ def conversation_delete_msg():
 # ══════════════════════════════════════════════════════════════
 # LLM endpoints — full mock (no real API keys needed)
 # ══════════════════════════════════════════════════════════════
+
+# ─── Helper to build model dicts ────────────────────────────
+def _m(name, mtype, fid, max_tokens=4096, tags=None, is_tools=False):
+    """Build a model entry for MOCK_LLM_LIST / MOCK_LLM_FACTORIES."""
+    tag_map = {
+        "chat": "LLM,CHAT",
+        "embedding": "TEXT EMBEDDING",
+        "image2text": "IMAGE2TEXT,CHAT",
+        "speech2text": "SPEECH2TEXT",
+        "tts": "TTS",
+        "rerank": "TEXT RE-RANK",
+        "ocr": "IMAGE2TEXT",
+        "moderation": "MODERATION",
+    }
+    return {
+        "llm_name": name,
+        "model_type": mtype,
+        "available": True,
+        "fid": fid,
+        "max_tokens": max_tokens,
+        "status": "1",
+        "tags": tags or tag_map.get(mtype, "LLM"),
+        "is_tools": is_tools,
+    }
+
+# ─── All factory definitions with their models ──────────────
+# Format: { "FactoryName": [ _m(...), ... ] }
+# Tags on factory = union of all model tags
+# model_type values: chat, embedding, image2text, speech2text, tts, rerank, ocr, moderation
+
 MOCK_LLM_LIST = {
+    # ── Major Cloud Providers ──────────────────────────────
+    "OpenAI": [
+        _m("gpt-4o", "chat", "OpenAI", 128000, is_tools=True),
+        _m("gpt-4o-mini", "chat", "OpenAI", 128000, is_tools=True),
+        _m("gpt-4-turbo", "chat", "OpenAI", 128000, is_tools=True),
+        _m("gpt-4", "chat", "OpenAI", 8192, is_tools=True),
+        _m("gpt-3.5-turbo", "chat", "OpenAI", 16385, is_tools=True),
+        _m("o1-preview", "chat", "OpenAI", 128000),
+        _m("o1-mini", "chat", "OpenAI", 128000),
+        _m("text-embedding-3-large", "embedding", "OpenAI", 8191),
+        _m("text-embedding-3-small", "embedding", "OpenAI", 8191),
+        _m("text-embedding-ada-002", "embedding", "OpenAI", 8191),
+        _m("tts-1", "tts", "OpenAI", 4096),
+        _m("tts-1-hd", "tts", "OpenAI", 4096),
+        _m("whisper-1", "speech2text", "OpenAI", 25000),
+        _m("gpt-4o-vision", "image2text", "OpenAI", 128000),
+        _m("omni-moderation-latest", "moderation", "OpenAI", 32768, tags="MODERATION"),
+    ],
+    "Anthropic": [
+        _m("claude-3.5-sonnet", "chat", "Anthropic", 200000, is_tools=True),
+        _m("claude-3.5-haiku", "chat", "Anthropic", 200000, is_tools=True),
+        _m("claude-3-opus", "chat", "Anthropic", 200000, is_tools=True),
+        _m("claude-3-sonnet", "chat", "Anthropic", 200000, is_tools=True),
+        _m("claude-3-haiku", "chat", "Anthropic", 200000, is_tools=True),
+    ],
+    "Gemini": [
+        _m("gemini-2.0-flash", "chat", "Gemini", 1048576, is_tools=True),
+        _m("gemini-1.5-pro", "chat", "Gemini", 2097152, is_tools=True),
+        _m("gemini-1.5-flash", "chat", "Gemini", 1048576, is_tools=True),
+        _m("gemini-1.0-pro", "chat", "Gemini", 32760),
+        _m("gemini-1.5-pro-vision", "image2text", "Gemini", 2097152),
+        _m("text-embedding-004", "embedding", "Gemini", 2048),
+    ],
+    "Azure-OpenAI": [
+        _m("gpt-4o", "chat", "Azure-OpenAI", 128000, is_tools=True),
+        _m("gpt-4o-mini", "chat", "Azure-OpenAI", 128000, is_tools=True),
+        _m("gpt-4-turbo", "chat", "Azure-OpenAI", 128000, is_tools=True),
+        _m("gpt-4", "chat", "Azure-OpenAI", 8192, is_tools=True),
+        _m("gpt-35-turbo", "chat", "Azure-OpenAI", 16385, is_tools=True),
+        _m("text-embedding-3-large", "embedding", "Azure-OpenAI", 8191),
+        _m("text-embedding-3-small", "embedding", "Azure-OpenAI", 8191),
+        _m("text-embedding-ada-002", "embedding", "Azure-OpenAI", 8191),
+        _m("whisper", "speech2text", "Azure-OpenAI", 25000),
+        _m("tts", "tts", "Azure-OpenAI", 4096),
+    ],
+    "Bedrock": [
+        _m("anthropic.claude-3-5-sonnet-20241022-v2:0", "chat", "Bedrock", 200000, is_tools=True),
+        _m("anthropic.claude-3-haiku-20240307-v1:0", "chat", "Bedrock", 200000, is_tools=True),
+        _m("amazon.titan-text-express-v1", "chat", "Bedrock", 8192),
+        _m("amazon.titan-embed-text-v2:0", "embedding", "Bedrock", 8192),
+        _m("cohere.embed-english-v3", "embedding", "Bedrock", 512),
+        _m("amazon.titan-image-generator-v1", "image2text", "Bedrock", 4096),
+    ],
+    "Google Cloud": [
+        _m("gemini-pro", "chat", "Google Cloud", 32760, is_tools=True),
+        _m("gemini-pro-vision", "image2text", "Google Cloud", 16384),
+        _m("textembedding-gecko@003", "embedding", "Google Cloud", 3072),
+        _m("chirp", "speech2text", "Google Cloud", 60000),
+    ],
+
+    # ── DeepSeek & Chinese Providers ──────────────────────
+    "DeepSeek": [
+        _m("deepseek-chat", "chat", "DeepSeek", 65536, is_tools=True),
+        _m("deepseek-coder", "chat", "DeepSeek", 65536, is_tools=True),
+        _m("deepseek-reasoner", "chat", "DeepSeek", 65536),
+    ],
+    "Tongyi-Qianwen": [
+        _m("qwen-max", "chat", "Tongyi-Qianwen", 32768, is_tools=True),
+        _m("qwen-plus", "chat", "Tongyi-Qianwen", 131072, is_tools=True),
+        _m("qwen-turbo", "chat", "Tongyi-Qianwen", 131072, is_tools=True),
+        _m("qwen-vl-max", "image2text", "Tongyi-Qianwen", 32768),
+        _m("text-embedding-v3", "embedding", "Tongyi-Qianwen", 8192),
+        _m("paraformer-realtime-v2", "speech2text", "Tongyi-Qianwen", 60000),
+        _m("cosyvoice-v1", "tts", "Tongyi-Qianwen", 4096),
+        _m("gte-rerank", "rerank", "Tongyi-Qianwen", 4096),
+    ],
+    "ZHIPU-AI": [
+        _m("glm-4", "chat", "ZHIPU-AI", 128000, is_tools=True),
+        _m("glm-4-flash", "chat", "ZHIPU-AI", 128000, is_tools=True),
+        _m("glm-4v", "image2text", "ZHIPU-AI", 8192),
+        _m("embedding-3", "embedding", "ZHIPU-AI", 8192),
+    ],
+    "Moonshot": [
+        _m("moonshot-v1-8k", "chat", "Moonshot", 8192, is_tools=True),
+        _m("moonshot-v1-32k", "chat", "Moonshot", 32768, is_tools=True),
+        _m("moonshot-v1-128k", "chat", "Moonshot", 128000, is_tools=True),
+    ],
+    "文心一言": [
+        _m("ernie-4.0-8k", "chat", "文心一言", 8192, is_tools=True),
+        _m("ernie-3.5-8k", "chat", "文心一言", 8192, is_tools=True),
+        _m("ernie-speed-128k", "chat", "文心一言", 128000),
+        _m("ernie-text-embedding", "embedding", "文心一言", 512),
+    ],
+    "BaiChuan": [
+        _m("Baichuan4", "chat", "BaiChuan", 32768, is_tools=True),
+        _m("Baichuan3-Turbo", "chat", "BaiChuan", 32768, is_tools=True),
+        _m("Baichuan-Text-Embedding", "embedding", "BaiChuan", 512),
+    ],
+    "MiniMax": [
+        _m("abab6.5s-chat", "chat", "MiniMax", 245760, is_tools=True),
+        _m("abab5.5-chat", "chat", "MiniMax", 16384, is_tools=True),
+        _m("embo-01", "embedding", "MiniMax", 4096),
+        _m("speech-02-hd", "tts", "MiniMax", 4096),
+    ],
+    "VolcEngine": [
+        _m("doubao-pro-128k", "chat", "VolcEngine", 128000, is_tools=True),
+        _m("doubao-lite-128k", "chat", "VolcEngine", 128000, is_tools=True),
+        _m("doubao-embedding", "embedding", "VolcEngine", 4096),
+        _m("doubao-tts", "tts", "VolcEngine", 4096),
+        _m("doubao-vision-pro", "image2text", "VolcEngine", 128000),
+    ],
+    "XunFei Spark": [
+        _m("spark-max", "chat", "XunFei Spark", 128000, is_tools=True),
+        _m("spark-pro", "chat", "XunFei Spark", 8192, is_tools=True),
+        _m("spark-lite", "chat", "XunFei Spark", 4096),
+    ],
+    "BaiduYiyan": [
+        _m("ernie-4.0-turbo", "chat", "BaiduYiyan", 131072, is_tools=True),
+        _m("ernie-3.5-turbo", "chat", "BaiduYiyan", 131072),
+    ],
+    "Tencent Hunyuan": [
+        _m("hunyuan-pro", "chat", "Tencent Hunyuan", 32768, is_tools=True),
+        _m("hunyuan-standard", "chat", "Tencent Hunyuan", 32768, is_tools=True),
+        _m("hunyuan-lite", "chat", "Tencent Hunyuan", 32768),
+        _m("hunyuan-embedding", "embedding", "Tencent Hunyuan", 1024),
+    ],
+    "Tencent Cloud": [
+        _m("hunyuan-pro", "chat", "Tencent Cloud", 32768, is_tools=True),
+        _m("hunyuan-standard", "chat", "Tencent Cloud", 32768),
+        _m("tencent-tts", "tts", "Tencent Cloud", 4096),
+        _m("tencent-asr", "speech2text", "Tencent Cloud", 60000),
+    ],
+    "StepFun": [
+        _m("step-2-16k", "chat", "StepFun", 16384, is_tools=True),
+        _m("step-1-128k", "chat", "StepFun", 128000, is_tools=True),
+        _m("step-1v-8k", "image2text", "StepFun", 8192),
+    ],
+
+    # ── Open-Source / Local Providers ─────────────────────
     "Ollama": [
-        {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "available": True, "fid": "Ollama", "max_tokens": 512, "status": "1"},
-        {"llm_name": "qwen2.5:latest", "model_type": "chat", "available": True, "fid": "Ollama", "max_tokens": 8192, "status": "1"},
-        {"llm_name": "minicpm-v:latest", "model_type": "image2text", "available": True, "fid": "Ollama", "max_tokens": 4096, "status": "1"},
+        _m("llama3.1:70b", "chat", "Ollama", 128000, is_tools=True),
+        _m("llama3.1:8b", "chat", "Ollama", 128000, is_tools=True),
+        _m("qwen2.5:latest", "chat", "Ollama", 32768, is_tools=True),
+        _m("mistral:latest", "chat", "Ollama", 32768, is_tools=True),
+        _m("gemma2:latest", "chat", "Ollama", 8192),
+        _m("phi3:latest", "chat", "Ollama", 128000),
+        _m("codellama:latest", "chat", "Ollama", 16384),
+        _m("BAAI/bge-large-en-v1.5", "embedding", "Ollama", 512),
+        _m("nomic-embed-text:latest", "embedding", "Ollama", 8192),
+        _m("minicpm-v:latest", "image2text", "Ollama", 4096),
+        _m("llava:latest", "image2text", "Ollama", 4096),
+    ],
+    "Xinference": [
+        _m("qwen2-instruct", "chat", "Xinference", 32768, is_tools=True),
+        _m("chatglm3", "chat", "Xinference", 8192),
+        _m("bge-large-en-v1.5", "embedding", "Xinference", 512),
+        _m("bge-reranker-v2-m3", "rerank", "Xinference", 512),
+        _m("funasr-paraformer", "speech2text", "Xinference", 60000),
+        _m("cosyvoice", "tts", "Xinference", 4096),
+    ],
+    "LM-Studio": [
+        _m("lmstudio-community/Meta-Llama-3.1-8B", "chat", "LM-Studio", 128000),
+        _m("lmstudio-community/Qwen2.5-7B", "chat", "LM-Studio", 32768),
+        _m("nomic-ai/nomic-embed-text-v1.5", "embedding", "LM-Studio", 8192),
+    ],
+    "LocalAI": [
+        _m("gpt-4-local", "chat", "LocalAI", 8192),
+        _m("bert-embeddings", "embedding", "LocalAI", 512),
+        _m("whisper-local", "speech2text", "LocalAI", 25000),
+        _m("piper-tts", "tts", "LocalAI", 4096),
+    ],
+    "GPUStack": [
+        _m("llama-3.1-8b-instruct", "chat", "GPUStack", 128000, is_tools=True),
+        _m("qwen2.5-7b-instruct", "chat", "GPUStack", 32768, is_tools=True),
+        _m("bge-m3", "embedding", "GPUStack", 8192),
+        _m("bge-reranker-v2-m3", "rerank", "GPUStack", 512),
+    ],
+    "VLLM": [
+        _m("meta-llama/Meta-Llama-3.1-70B-Instruct", "chat", "VLLM", 128000, is_tools=True),
+        _m("mistralai/Mistral-7B-Instruct-v0.3", "chat", "VLLM", 32768),
+        _m("BAAI/bge-large-en-v1.5", "embedding", "VLLM", 512),
+    ],
+    "ModelScope": [
+        _m("qwen2.5-72b-instruct", "chat", "ModelScope", 131072, is_tools=True),
+        _m("qwen2.5-7b-instruct", "chat", "ModelScope", 131072, is_tools=True),
+        _m("gte-Qwen2-7B-instruct", "embedding", "ModelScope", 8192),
+    ],
+    "OpenAI-API-Compatible": [
+        _m("custom-model", "chat", "OpenAI-API-Compatible", 4096),
+        _m("custom-embedding", "embedding", "OpenAI-API-Compatible", 4096),
+    ],
+
+    # ── Inference Platforms ───────────────────────────────
+    "Mistral": [
+        _m("mistral-large-latest", "chat", "Mistral", 128000, is_tools=True),
+        _m("mistral-medium-latest", "chat", "Mistral", 32768, is_tools=True),
+        _m("mistral-small-latest", "chat", "Mistral", 32768, is_tools=True),
+        _m("open-mistral-nemo", "chat", "Mistral", 128000),
+        _m("codestral-latest", "chat", "Mistral", 32768),
+        _m("mistral-embed", "embedding", "Mistral", 8192),
+        _m("pixtral-large-latest", "image2text", "Mistral", 128000),
+        _m("mistral-moderation-latest", "moderation", "Mistral", 8192, tags="MODERATION"),
+    ],
+    "Groq": [
+        _m("llama-3.3-70b-versatile", "chat", "Groq", 128000, is_tools=True),
+        _m("llama-3.1-8b-instant", "chat", "Groq", 128000, is_tools=True),
+        _m("mixtral-8x7b-32768", "chat", "Groq", 32768, is_tools=True),
+        _m("gemma2-9b-it", "chat", "Groq", 8192),
+        _m("whisper-large-v3", "speech2text", "Groq", 25000),
+    ],
+    "Cohere": [
+        _m("command-r-plus", "chat", "Cohere", 128000, is_tools=True),
+        _m("command-r", "chat", "Cohere", 128000, is_tools=True),
+        _m("command-light", "chat", "Cohere", 4096),
+        _m("embed-english-v3.0", "embedding", "Cohere", 512),
+        _m("embed-multilingual-v3.0", "embedding", "Cohere", 512),
+        _m("rerank-english-v3.0", "rerank", "Cohere", 4096),
+        _m("rerank-multilingual-v3.0", "rerank", "Cohere", 4096),
+    ],
+    "NVIDIA": [
+        _m("meta/llama-3.1-405b-instruct", "chat", "NVIDIA", 128000, is_tools=True),
+        _m("meta/llama-3.1-70b-instruct", "chat", "NVIDIA", 128000, is_tools=True),
+        _m("mistralai/mixtral-8x22b-instruct-v0.1", "chat", "NVIDIA", 65536),
+        _m("nvidia/nv-embedqa-e5-v5", "embedding", "NVIDIA", 512),
+        _m("nvidia/nv-rerankqa-mistral-4b-v3", "rerank", "NVIDIA", 4096),
+    ],
+    "OpenRouter": [
+        _m("openai/gpt-4o", "chat", "OpenRouter", 128000, is_tools=True),
+        _m("anthropic/claude-3.5-sonnet", "chat", "OpenRouter", 200000, is_tools=True),
+        _m("google/gemini-pro-1.5", "chat", "OpenRouter", 2097152, is_tools=True),
+        _m("meta-llama/llama-3.1-405b-instruct", "chat", "OpenRouter", 128000),
+        _m("mistralai/mistral-large", "chat", "OpenRouter", 128000),
+    ],
+    "TogetherAI": [
+        _m("meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "chat", "TogetherAI", 128000, is_tools=True),
+        _m("mistralai/Mixtral-8x22B-Instruct-v0.1", "chat", "TogetherAI", 65536),
+        _m("togethercomputer/m2-bert-80M-8k-retrieval", "embedding", "TogetherAI", 8192),
+        _m("Salesforce/Llama-Rank-V1", "rerank", "TogetherAI", 4096),
+    ],
+    "Replicate": [
+        _m("meta/meta-llama-3.1-405b-instruct", "chat", "Replicate", 128000),
+        _m("stability-ai/sdxl", "image2text", "Replicate", 4096),
+    ],
+    "HuggingFace": [
+        _m("meta-llama/Meta-Llama-3.1-70B-Instruct", "chat", "HuggingFace", 128000),
+        _m("mistralai/Mistral-7B-Instruct-v0.3", "chat", "HuggingFace", 32768),
+        _m("BAAI/bge-large-en-v1.5", "embedding", "HuggingFace", 512),
+        _m("BAAI/bge-reranker-v2-m3", "rerank", "HuggingFace", 512),
+    ],
+    "SILICONFLOW": [
+        _m("deepseek-ai/DeepSeek-V3", "chat", "SILICONFLOW", 65536, is_tools=True),
+        _m("Qwen/Qwen2.5-72B-Instruct", "chat", "SILICONFLOW", 131072, is_tools=True),
+        _m("BAAI/bge-large-en-v1.5", "embedding", "SILICONFLOW", 512),
+        _m("BAAI/bge-reranker-v2-m3", "rerank", "SILICONFLOW", 512),
+        _m("fishaudio/fish-speech-1.5", "tts", "SILICONFLOW", 4096),
+        _m("Pro/Qwen/Qwen2-VL-7B-Instruct", "image2text", "SILICONFLOW", 32768),
+    ],
+    "PPIO": [
+        _m("deepseek/deepseek-r1", "chat", "PPIO", 65536, is_tools=True),
+        _m("deepseek/deepseek-v3", "chat", "PPIO", 65536, is_tools=True),
+        _m("qwen/qwen2.5-72b-instruct", "chat", "PPIO", 131072),
+    ],
+    "DeepInfra": [
+        _m("meta-llama/Meta-Llama-3.1-405B-Instruct", "chat", "DeepInfra", 128000, is_tools=True),
+        _m("mistralai/Mixtral-8x22B-Instruct-v0.1", "chat", "DeepInfra", 65536),
+        _m("BAAI/bge-large-en-v1.5", "embedding", "DeepInfra", 512),
+        _m("BAAI/bge-reranker-v2-m3", "rerank", "DeepInfra", 512),
+    ],
+    "NovitaAI": [
+        _m("meta-llama/llama-3.1-70b-instruct", "chat", "NovitaAI", 128000, is_tools=True),
+        _m("mistralai/mistral-7b-instruct", "chat", "NovitaAI", 32768),
+    ],
+    "LeptonAI": [
+        _m("llama3-1-405b", "chat", "LeptonAI", 128000),
+        _m("mixtral-8x7b", "chat", "LeptonAI", 32768),
+    ],
+    "PerfXCloud": [
+        _m("llama3-70b-instruct", "chat", "PerfXCloud", 8192),
+        _m("qwen2-72b-instruct", "chat", "PerfXCloud", 131072),
+    ],
+    "GiteeAI": [
+        _m("Qwen2.5-72B-Instruct", "chat", "GiteeAI", 131072, is_tools=True),
+        _m("codegeex4-all-9b", "chat", "GiteeAI", 32768),
+        _m("bge-large-zh-v1.5", "embedding", "GiteeAI", 512),
+    ],
+
+    # ── Embedding & Rerank Specialists ────────────────────
+    "Jina": [
+        _m("jina-embeddings-v3", "embedding", "Jina", 8192),
+        _m("jina-embeddings-v2-base-en", "embedding", "Jina", 8192),
+        _m("jina-reranker-v2-base-multilingual", "rerank", "Jina", 8192),
+        _m("jina-clip-v1", "image2text", "Jina", 8192),
+    ],
+    "Voyage AI": [
+        _m("voyage-3", "embedding", "Voyage AI", 32000),
+        _m("voyage-3-lite", "embedding", "Voyage AI", 32000),
+        _m("voyage-code-3", "embedding", "Voyage AI", 32000),
+        _m("rerank-2", "rerank", "Voyage AI", 32000),
+    ],
+    "Upstage": [
+        _m("solar-pro", "chat", "Upstage", 32768, is_tools=True),
+        _m("solar-embedding-1-large", "embedding", "Upstage", 4000),
+    ],
+    "BAAI": [
+        _m("bge-large-en-v1.5", "embedding", "BAAI", 512),
+        _m("bge-base-en-v1.5", "embedding", "BAAI", 512),
+        _m("bge-small-en-v1.5", "embedding", "BAAI", 512),
+        _m("bge-m3", "embedding", "BAAI", 8192),
+        _m("bge-reranker-v2-m3", "rerank", "BAAI", 512),
+        _m("bge-reranker-large", "rerank", "BAAI", 512),
+    ],
+    "nomic-ai": [
+        _m("nomic-embed-text-v1.5", "embedding", "nomic-ai", 8192),
+        _m("nomic-embed-text-v1", "embedding", "nomic-ai", 8192),
+    ],
+    "jinaai": [
+        _m("jina-embeddings-v3", "embedding", "jinaai", 8192),
+        _m("jina-reranker-v2", "rerank", "jinaai", 8192),
+    ],
+    "sentence-transformers": [
+        _m("all-MiniLM-L6-v2", "embedding", "sentence-transformers", 256),
+        _m("all-mpnet-base-v2", "embedding", "sentence-transformers", 384),
+        _m("paraphrase-multilingual-MiniLM-L12-v2", "embedding", "sentence-transformers", 384),
+    ],
+
+    # ── TTS & Speech Specialists ──────────────────────────
+    "Fish Audio": [
+        _m("fish-speech-1.5", "tts", "Fish Audio", 4096),
+        _m("fish-speech-1.4", "tts", "Fish Audio", 4096),
+    ],
+    "Youdao": [
+        _m("youdao-tts", "tts", "Youdao", 4096),
+        _m("youdao-asr", "speech2text", "Youdao", 60000),
+    ],
+
+    # ── VLM / Image2Text Specialists ─────────────────────
+    "Grok": [
+        _m("grok-2", "chat", "Grok", 131072, is_tools=True),
+        _m("grok-2-vision", "image2text", "Grok", 32768),
+    ],
+    "xAI": [
+        _m("grok-2", "chat", "xAI", 131072, is_tools=True),
+        _m("grok-2-vision", "image2text", "xAI", 32768),
+    ],
+
+    # ── OCR Specialists ──────────────────────────────────
+    "MinerU": [
+        _m("mineru-ocr", "ocr", "MinerU", 4096, tags="IMAGE2TEXT"),
+    ],
+    "PaddleOCR": [
+        _m("paddleocr-v4", "ocr", "PaddleOCR", 4096, tags="IMAGE2TEXT"),
+        _m("paddleocr-v3", "ocr", "PaddleOCR", 4096, tags="IMAGE2TEXT"),
+    ],
+    "Builtin": [
+        _m("ragflow-ocr", "ocr", "Builtin", 4096, tags="IMAGE2TEXT"),
+    ],
+
+    # ── Other / Smaller Providers ────────────────────────
+    "302.AI": [
+        _m("gpt-4o", "chat", "302.AI", 128000, is_tools=True),
+        _m("claude-3.5-sonnet", "chat", "302.AI", 200000, is_tools=True),
+        _m("text-embedding-3-large", "embedding", "302.AI", 8191),
+    ],
+    "TokenPony": [
+        _m("gpt-4o", "chat", "TokenPony", 128000, is_tools=True),
+        _m("claude-3.5-sonnet", "chat", "TokenPony", 200000),
+    ],
+    "Meituan": [
+        _m("longcat-pro", "chat", "Meituan", 128000, is_tools=True),
+        _m("longcat-lite", "chat", "Meituan", 32768),
+    ],
+    "LongCat": [
+        _m("longcat-pro-128k", "chat", "LongCat", 128000, is_tools=True),
+        _m("longcat-lite-32k", "chat", "LongCat", 32768),
+    ],
+    "CometAPI": [
+        _m("gpt-4o", "chat", "CometAPI", 128000, is_tools=True),
+        _m("claude-3.5-sonnet", "chat", "CometAPI", 200000),
+    ],
+    "DeerAPI": [
+        _m("gpt-4o", "chat", "DeerAPI", 128000, is_tools=True),
+        _m("claude-3.5-sonnet", "chat", "DeerAPI", 200000),
+    ],
+    "Jiekou.AI": [
+        _m("gpt-4o", "chat", "Jiekou.AI", 128000, is_tools=True),
+        _m("claude-3.5-sonnet", "chat", "Jiekou.AI", 200000),
+    ],
+    "n1n": [
+        _m("n1n-chat", "chat", "n1n", 32768),
+        _m("n1n-embed", "embedding", "n1n", 4096),
     ],
 }
 
-MOCK_LLM_FACTORIES = [
-    {"name": "Ollama", "logo": "", "tags": "LLM,TEXT EMBEDDING,IMAGE2TEXT",
-     "status": "1", "llm": [
-         {"llm_name": "BAAI/bge-large-en-v1.5", "model_type": "embedding", "tags": "TEXT EMBEDDING", "status": "1"},
-         {"llm_name": "qwen2.5:latest", "model_type": "chat", "tags": "LLM,CHAT", "status": "1"},
-         {"llm_name": "minicpm-v:latest", "model_type": "image2text", "tags": "IMAGE2TEXT,CHAT", "status": "1"},
-     ]},
-]
+
+def _build_factory_entry(name, models):
+    """Build a factory entry for MOCK_LLM_FACTORIES from MOCK_LLM_LIST."""
+    tags_set = set()
+    tag_map = {
+        "chat": "LLM",
+        "embedding": "TEXT EMBEDDING",
+        "image2text": "IMAGE2TEXT",
+        "speech2text": "SPEECH2TEXT",
+        "tts": "TTS",
+        "rerank": "TEXT RE-RANK",
+        "ocr": "IMAGE2TEXT",
+        "moderation": "MODERATION",
+    }
+    llm_entries = []
+    for m in models:
+        mt = m.get("model_type", "chat")
+        factory_tag = tag_map.get(mt, "LLM")
+        tags_set.add(factory_tag)
+        if mt == "chat":
+            tags_set.add("LLM")
+        llm_entries.append({
+            "llm_name": m["llm_name"],
+            "model_type": mt,
+            "tags": m.get("tags", factory_tag),
+            "status": m.get("status", "1"),
+        })
+    return {
+        "name": name,
+        "logo": "",
+        "tags": ",".join(sorted(tags_set)),
+        "status": "1",
+        "llm": llm_entries,
+    }
+
+
+# Auto-build factories from MOCK_LLM_LIST
+MOCK_LLM_FACTORIES = [_build_factory_entry(name, models) for name, models in MOCK_LLM_LIST.items()]
 
 
 @app.route("/v1/llm/factories", methods=["GET"])
@@ -1881,7 +2327,8 @@ def my_llms():
         for m in models:
             mt = m.get("model_type", "chat")
             tag = {"chat": "LLM,CHAT", "embedding": "TEXT EMBEDDING", "image2text": "IMAGE2TEXT,CHAT",
-                   "speech2text": "SPEECH2TEXT", "tts": "TTS", "rerank": "RERANK"}.get(mt, "LLM")
+                   "speech2text": "SPEECH2TEXT", "tts": "TTS", "rerank": "TEXT RE-RANK",
+                   "ocr": "IMAGE2TEXT", "moderation": "MODERATION"}.get(mt, "LLM")
             tags_set.update(tag.split(","))
             llm_list.append({
                 "type": mt,
@@ -2051,7 +2498,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"  User: admin@emami.com (Super Admin)")
     print(f"  Projects: {len(PROJECTS)} | Users: {len(ADMIN_USERS)} | Docs: {len(MOCK_DOCUMENTS)}")
-    print(f"  LLM providers: {list(MOCK_LLM_LIST.keys())} (no real API keys needed)")
+    print(f"  LLM providers: {len(MOCK_LLM_LIST)} factories, {sum(len(v) for v in MOCK_LLM_LIST.values())} models (no real API keys needed)")
     print()
     print("  Endpoints:")
     print("    /v1/user/*                -> Auth + user info + tenant settings")
