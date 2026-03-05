@@ -103,7 +103,7 @@ class DialogService(CommonService):
 
     @classmethod
     @DB.connection_context()
-    def get_by_tenant_ids(cls, joined_tenant_ids, user_id, page_number, items_per_page, orderby, desc, keywords, parser_id=None):
+    def get_by_tenant_ids(cls, joined_tenant_ids, user_id, page_number, items_per_page, orderby, desc, keywords, parser_id=None, project_id=None):
         from api.db.db_models import User
 
         fields = [
@@ -149,6 +149,8 @@ class DialogService(CommonService):
             )
         if parser_id:
             dialogs = dialogs.where(cls.model.parser_id == parser_id)
+        if project_id:
+            dialogs = dialogs.where(cls.model.project_id == project_id)
         if desc:
             dialogs = dialogs.order_by(cls.model.getter_by(orderby).desc())
         else:

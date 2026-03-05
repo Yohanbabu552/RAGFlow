@@ -120,11 +120,15 @@ export const useTestRetrieval = () => {
   };
 };
 
-export const useFetchNextKnowledgeListByPage = () => {
+export const useFetchNextKnowledgeListByPage = (projectId?: string) => {
   const { searchString, handleInputChange } = useHandleSearchChange();
   const { pagination, setPagination } = useGetPaginationWithRouter();
   const debouncedSearchString = useDebounce(searchString, { wait: 500 });
   const { filterValue, handleFilterSubmit } = useHandleFilterSubmit();
+
+  // Only pass project_id when a specific project is selected (not "all")
+  const effectiveProjectId =
+    projectId && projectId !== 'all' ? projectId : undefined;
 
   const { data, isFetching: loading } = useQuery<IKnowledgeResult>({
     queryKey: [
@@ -133,6 +137,7 @@ export const useFetchNextKnowledgeListByPage = () => {
         debouncedSearchString,
         ...pagination,
         filterValue,
+        projectId: effectiveProjectId,
       },
     ],
     initialData: {
@@ -146,6 +151,7 @@ export const useFetchNextKnowledgeListByPage = () => {
           keywords: debouncedSearchString,
           page_size: pagination.pageSize,
           page: pagination.current,
+          project_id: effectiveProjectId,
         },
         {
           owner_ids: filterValue.owner,

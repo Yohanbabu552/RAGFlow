@@ -17,10 +17,21 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { FormLayout } from '@/constants/form';
-import { useFetchTenantInfo } from '@/hooks/use-user-setting-request';
+import {
+  useFetchTenantInfo,
+  useFetchUserInfo,
+} from '@/hooks/use-user-setting-request';
 import { IModalProps } from '@/interfaces/common';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { FolderKanban } from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +47,10 @@ const FormId = 'dataset-creating-form';
 export function InputForm({ onOk }: IModalProps<any>) {
   const { t } = useTranslation();
   const { data: tenantInfo } = useFetchTenantInfo();
+  const { data: userInfo } = useFetchUserInfo();
+
+  // Get user's project list for the dropdown
+  const projectRoles = userInfo?.project_roles || [];
 
   const FormSchema = z
     .object({
@@ -45,6 +60,7 @@ export function InputForm({ onOk }: IModalProps<any>) {
           message: t('knowledgeList.namePlaceholder'),
         })
         .trim(),
+      project_id: z.string().optional(),
       parseType: z.number().optional(),
       embd_id: z
         .string()
@@ -81,6 +97,7 @@ export function InputForm({ onOk }: IModalProps<any>) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       name: '',
+      project_id: projectRoles.length === 1 ? projectRoles[0].project_id : '',
       parseType: 1,
       parser_id: '',
       embd_id: tenantInfo?.embd_id,
@@ -88,8 +105,15 @@ export function InputForm({ onOk }: IModalProps<any>) {
   });
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    console.log('submit', data);
-    onOk?.(data);
+    // Clean up project_id — "none" or empty means no project
+    const cleanData = {
+      ...data,
+      project_id:
+        data.project_id && data.project_id !== 'none'
+          ? data.project_id
+          : undefined,
+    };
+    onOk?.(cleanData);
   }
 
   const parseType = useWatch({
@@ -130,6 +154,41 @@ export function InputForm({ onOk }: IModalProps<any>) {
             </FormItem>
           )}
         />
+
+        {/* Project selector — only shown when user has projects */}
+        {projectRoles.length > 0 && (
+          <FormField
+            control={form.control}
+            name="project_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-1.5">
+                  <FolderKanban className="size-3.5" />
+                  Project
+                </FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a project (optional)" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="none">No Project</SelectItem>
+                    {projectRoles.map((pr) => (
+                      <SelectItem key={pr.project_id} value={pr.project_id}>
+                        {pr.project_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <EmbeddingModelItem line={2} isEdit={false} />
         <ParseTypeItem />

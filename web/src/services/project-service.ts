@@ -73,4 +73,11 @@ export const updateProjectUserRole = ({
   role: 'admin' | 'member';
 }) => request.put(api.project_update_user_role(projectId, userId), { data: { role } });
 
+/** List knowledge bases (datasets) belonging to a specific project */
+export const listProjectKBs = (projectId: string) =>
+  request.post(api.kb_list, {
+    data: { project_id: projectId },
+    params: { page: 1, page_size: 100 },
+  });
+
 export default projectService;

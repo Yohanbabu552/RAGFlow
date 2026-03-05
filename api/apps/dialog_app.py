@@ -112,6 +112,7 @@ async def set_dialog():
                 "tenant_id": current_user.id,
                 "name": name,
                 "kb_ids": req.get("kb_ids", []),
+                "project_id": req.get("project_id", None),
                 "description": description,
                 "llm_id": llm_id,
                 "llm_setting": llm_setting,
@@ -203,6 +204,7 @@ async def list_dialogs_next():
 
     req = await get_request_json()
     owner_ids = req.get("owner_ids", [])
+    project_id = req.get("project_id", None)
     try:
         if not owner_ids:
             # tenants = TenantService.get_joined_tenants_by_user_id(current_user.id)
@@ -210,12 +212,14 @@ async def list_dialogs_next():
             tenants = [] # keep it here
             dialogs, total = DialogService.get_by_tenant_ids(
                 tenants, current_user.id, page_number,
-                items_per_page, orderby, desc, keywords, parser_id)
+                items_per_page, orderby, desc, keywords, parser_id,
+                project_id=project_id)
         else:
             tenants = owner_ids
             dialogs, total = DialogService.get_by_tenant_ids(
                 tenants, current_user.id, 0,
-                0, orderby, desc, keywords, parser_id)
+                0, orderby, desc, keywords, parser_id,
+                project_id=project_id)
             dialogs = [dialog for dialog in dialogs if dialog["tenant_id"] in tenants]
             total = len(dialogs)
             if page_number and items_per_page:

@@ -247,18 +247,21 @@ async def list_kbs():
 
     req = await get_request_json()
     owner_ids = req.get("owner_ids", [])
+    project_id = req.get("project_id", None)
     try:
         if not owner_ids:
             tenants = TenantService.get_joined_tenants_by_user_id(current_user.id)
             tenants = [m["tenant_id"] for m in tenants]
             kbs, total = KnowledgebaseService.get_by_tenant_ids(
                 tenants, current_user.id, page_number,
-                items_per_page, orderby, desc, keywords, parser_id)
+                items_per_page, orderby, desc, keywords, parser_id,
+                project_id=project_id)
         else:
             tenants = owner_ids
             kbs, total = KnowledgebaseService.get_by_tenant_ids(
                 tenants, current_user.id, 0,
-                0, orderby, desc, keywords, parser_id)
+                0, orderby, desc, keywords, parser_id,
+                project_id=project_id)
             kbs = [kb for kb in kbs if kb["tenant_id"] in tenants]
             total = len(kbs)
             if page_number and items_per_page:

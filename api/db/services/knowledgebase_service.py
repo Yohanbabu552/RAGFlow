@@ -136,7 +136,7 @@ class KnowledgebaseService(CommonService):
     def get_by_tenant_ids(cls, joined_tenant_ids, user_id,
                           page_number, items_per_page,
                           orderby, desc, keywords,
-                          parser_id=None
+                          parser_id=None, project_id=None
                           ):
         # Get knowledge bases by tenant IDs with pagination and filtering
         # Args:
@@ -184,6 +184,8 @@ class KnowledgebaseService(CommonService):
             )
         if parser_id:
             kbs = kbs.where(cls.model.parser_id == parser_id)
+        if project_id:
+            kbs = kbs.where(cls.model.project_id == project_id)
         if desc:
             kbs = kbs.order_by(cls.model.getter_by(orderby).desc())
         else:

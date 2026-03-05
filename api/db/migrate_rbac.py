@@ -39,7 +39,9 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from datetime import datetime
-from api.db.db_models import DB, Tenant, UserTenant, Knowledgebase, Project, UserProject
+from peewee import CharField
+from playhouse.migrate import MySQLMigrator, migrate as pw_migrate
+from api.db.db_models import DB, Tenant, UserTenant, Knowledgebase, Dialog, Project, UserProject
 from common.constants import StatusEnum
 from common.misc_utils import get_uuid
 from common.time_utils import current_timestamp, datetime_format
@@ -192,5 +194,30 @@ def _migrate_user_tenant(ut, project_id, stats):
     stats["user_projects_created"] += 1
 
 
+def migrate_dialog_project_id():
+    """Add project_id column to dialog table if it doesn't exist."""
+    logger.info("Checking if dialog table needs project_id column...")
+
+    with DB.connection_context():
+        try:
+            # Check if column already exists
+            cursor = DB.execute_sql("SHOW COLUMNS FROM dialog LIKE 'project_id'")
+            if cursor.fetchone():
+                logger.info("  dialog.project_id column already exists. Skipping.")
+                return
+
+            migrator = MySQLMigrator(DB)
+            pw_migrate(
+                migrator.add_column(
+                    "dialog", "project_id",
+                    CharField(max_length=32, null=True, help_text="project id for RBAC scoping", index=True)
+                ),
+            )
+            logger.info("  Added project_id column to dialog table.")
+        except Exception as ex:
+            logger.error(f"  Error adding project_id to dialog: {ex}")
+
+
 if __name__ == "__main__":
+    migrate_dialog_project_id()
     migrate_rbac_data()

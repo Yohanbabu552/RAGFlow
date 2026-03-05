@@ -60,10 +60,14 @@ export const useGetChatSearchParams = () => {
   };
 };
 
-export const useFetchDialogList = () => {
+export const useFetchDialogList = (projectId?: string) => {
   const { searchString, handleInputChange } = useHandleSearchChange();
   const { pagination, setPagination } = useGetPaginationWithRouter();
   const debouncedSearchString = useDebounce(searchString, { wait: 500 });
+
+  // Only pass project_id when a specific project is selected (not "all")
+  const effectiveProjectId =
+    projectId && projectId !== 'all' ? projectId : undefined;
 
   const {
     data,
@@ -75,6 +79,7 @@ export const useFetchDialogList = () => {
       {
         debouncedSearchString,
         ...pagination,
+        projectId: effectiveProjectId,
       },
     ],
     initialData: { dialogs: [], total: 0 },
@@ -88,7 +93,9 @@ export const useFetchDialogList = () => {
             page_size: pagination.pageSize,
             page: pagination.current,
           },
-          data: {},
+          data: {
+            project_id: effectiveProjectId,
+          },
         },
         true,
       );

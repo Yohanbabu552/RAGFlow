@@ -6,17 +6,24 @@ import { RenameDialog } from '@/components/rename-dialog';
 import { Button } from '@/components/ui/button';
 import { RAGFlowPagination } from '@/components/ui/ragflow-pagination';
 import { useFetchDialogList } from '@/hooks/use-chat-request';
+import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
 import { pick } from 'lodash';
-import { Plus } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { FolderKanban, Plus, Shield } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { ChatCard } from './chat-card';
 import { useRenameChat } from './hooks/use-rename-chat';
 
 export default function ChatList() {
+  const { data: userInfo } = useFetchUserInfo();
+  const projectRoles = userInfo?.project_roles || [];
+
+  // Project filter state
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+
   const { data, setPagination, pagination, handleInputChange, searchString } =
-    useFetchDialogList();
+    useFetchDialogList(selectedProjectId);
   const { t } = useTranslation();
   const {
     initialChatName,
@@ -50,6 +57,42 @@ export default function ChatList() {
 
   return (
     <section className="flex flex-col w-full flex-1">
+      {/* Project scope filter bar */}
+      {projectRoles.length > 0 && (
+        <div className="px-8 pt-4 pb-1 flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <FolderKanban className="size-4" />
+            <span>Project:</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setSelectedProjectId('all')}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                selectedProjectId === 'all'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              All Projects
+            </button>
+            {projectRoles.map((pr) => (
+              <button
+                key={pr.project_id}
+                onClick={() => setSelectedProjectId(pr.project_id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1 ${
+                  selectedProjectId === pr.project_id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {pr.role === 'admin' && <Shield className="size-3" />}
+                {pr.project_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {data.dialogs?.length <= 0 && !searchString && (
         <div className="flex w-full items-center justify-center h-[calc(100vh-164px)]">
           <EmptyAppCard

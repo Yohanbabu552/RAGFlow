@@ -46,7 +46,7 @@ export default function Datasets() {
     searchString,
     filterValue,
     handleFilterSubmit,
-  } = useFetchNextKnowledgeListByPage();
+  } = useFetchNextKnowledgeListByPage(selectedProjectId);
 
   const owners = useSelectOwners();
 
