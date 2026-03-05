@@ -12,7 +12,7 @@ import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
 import { IProject } from '@/interfaces/database/user-setting';
 import { Routes } from '@/routes';
 import projectService from '@/services/project-service';
-import { isSuperAdmin } from '@/utils/rbac-util';
+import { getEffectiveRole, isSuperAdmin } from '@/utils/rbac-util';
 import {
   FolderKanban,
   Plus,
@@ -32,6 +32,21 @@ export default function Projects() {
   const [formVisible, setFormVisible] = useState(false);
 
   const isAdmin = isSuperAdmin(userInfo);
+  const effectiveRole = getEffectiveRole(userInfo);
+  const selectedRole =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('selectedRole')
+      : null;
+
+  // Super Admins and Project Admins can create projects
+  const canCreateProject =
+    isAdmin ||
+    selectedRole === 'super_admin' ||
+    selectedRole === 'project_admin' ||
+    effectiveRole === 'project_admin';
+
+  // Only Super Admins can delete projects
+  const canDeleteProject = isAdmin || selectedRole === 'super_admin';
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -89,7 +104,7 @@ export default function Projects() {
             ({projects.length})
           </span>
         </div>
-        {isAdmin && (
+        {canCreateProject && (
           <Button onClick={() => setFormVisible(true)}>
             <Plus className="h-4 w-4 mr-1" />
             New Project
@@ -109,7 +124,7 @@ export default function Projects() {
         <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
           <FolderKanban className="size-16 mb-4 opacity-30" />
           <p className="text-lg">No projects yet</p>
-          {isAdmin && (
+          {canCreateProject && (
             <p className="text-sm mt-2">
               Create a project to organize your datasets and team.
             </p>
@@ -146,7 +161,7 @@ export default function Projects() {
                     >
                       <Settings className="size-3.5" />
                     </Button>
-                    {isAdmin && (
+                    {canDeleteProject && (
                       <Button
                         variant="ghost"
                         size="icon"
